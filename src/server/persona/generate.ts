@@ -4,6 +4,7 @@ import { writeAudit } from '@/server/audit';
 import { annotateAllPending } from './annotate-batch';
 import { extractPersona } from './extract';
 import { setStatus } from './status';
+import { embedAllPending } from '@/server/memory/embed-chunks';
 import type { AnnotatedChunk, ChatType, EmotionalTone } from '@/types/line';
 
 export interface PersonaGenerateResult {
@@ -11,6 +12,8 @@ export interface PersonaGenerateResult {
   basedOnChunks: number;
   annotatedChunks: number;
   failedAnnotations: number;
+  embedded: number;
+  embeddingFailed: number;
 }
 
 /**
@@ -62,6 +65,13 @@ export async function runPersonaPipeline(
     state: 'extracting',
     annotated: annotateResult.annotated,
     totalChunks: annotateResult.total,
+  });
+
+  // embedding 跟 extract 都不互相依賴；平行跑可省幾十秒。
+  // 失敗只當 warning，persona 還是可以照常生成。
+  const embedPromise = embedAllPending(userId).catch((err) => {
+    console.warn('[persona] embed in background failed', err);
+    return { total: 0, embedded: 0, failed: 0 };
   });
 
   const input: AnnotatedChunk[] = usable.map((c) => ({
@@ -125,11 +135,16 @@ export async function runPersonaPipeline(
   );
   await db.$transaction(updates);
 
+  // 此時 extract 已完成；等 embed 收尾。通常 embed 更快、但有可能還在跑。
+  const embedResult = await embedPromise;
+
   await writeAudit(userId, 'generate_persona', {
     version: nextVersion,
     basedOnChunks: input.length,
     annotated: annotateResult.annotated,
     failedAnnotations: annotateResult.failed,
+    embedded: embedResult.embedded,
+    embeddingFailed: embedResult.failed,
   });
 
   setStatus(userId, {
@@ -144,6 +159,8 @@ export async function runPersonaPipeline(
     basedOnChunks: input.length,
     annotatedChunks: annotateResult.annotated,
     failedAnnotations: annotateResult.failed,
+    embedded: embedResult.embedded,
+    embeddingFailed: embedResult.failed,
   };
 }
 

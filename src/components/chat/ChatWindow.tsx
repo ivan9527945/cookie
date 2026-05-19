@@ -7,7 +7,7 @@ import { SystemMessage } from './SystemMessage';
 import { useCookieState } from '@/components/cookie-shell/hooks/useCookieState';
 
 export function ChatWindow() {
-  const { history, pending, isStreaming, send } = useChat();
+  const { history, pending, isStreaming, error, send } = useChat();
   const setMode = useCookieState((s) => s.setMode);
   const [input, setInput] = useState('');
   const endRef = useRef<HTMLDivElement>(null);
@@ -25,6 +25,11 @@ export function ChatWindow() {
           <MessageBubble key={i} role={turn.role} content={turn.content} />
         ))}
         {pending ? <MessageBubble role="assistant" content={pending} /> : null}
+        {error ? (
+          <SystemMessage className="border-red-300 bg-red-50 text-red-700">
+            {error}
+          </SystemMessage>
+        ) : null}
         <div ref={endRef} />
       </div>
 
