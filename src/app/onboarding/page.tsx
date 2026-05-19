@@ -1,22 +1,103 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { FileDropzone } from '@/components/onboarding/FileDropzone';
+import type {
+  FilePreview,
+  IngestFileMeta,
+  IngestResponse,
+} from '@/types/ingest';
+
+type Step = 'upload' | 'preview' | 'submitting';
+
+interface PreviewState {
+  preview: FilePreview;
+  file: File;
+  chatRoom: string;
+  chatType: 'private' | 'group';
+  notes: string;
+}
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const [files, setFiles] = useState<File[]>([]);
-  const [submitting, setSubmitting] = useState(false);
+  const [step, setStep] = useState<Step>('upload');
+  const [items, setItems] = useState<PreviewState[]>([]);
+  const [selfName, setSelfName] = useState('');
+  const [error, setError] = useState<string | null>(null);
 
-  async function handleSubmit() {
-    if (files.length === 0) return;
-    setSubmitting(true);
+  const speakerOptions = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const it of items) {
+      for (const s of it.preview.speakers) {
+        counts.set(s.name, (counts.get(s.name) ?? 0) + s.messageCount);
+      }
+    }
+    return Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, c]) => ({ name, count: c }));
+  }, [items]);
+
+  async function handleFiles(files: File[]) {
+    setError(null);
+    setStep('submitting');
+
     const fd = new FormData();
     for (const f of files) fd.append('files', f);
-    const res = await fetch('/api/ingest', { method: 'POST', body: fd });
-    setSubmitting(false);
-    if (res.ok) router.push('/onboarding/process');
+
+    try {
+      const res = await fetch('/api/ingest/preview', {
+        method: 'POST',
+        body: fd,
+      });
+      if (!res.ok) throw new Error(`preview ${res.status}`);
+      const { files: previews } = (await res.json()) as { files: FilePreview[] };
+      const next = previews.map((p, i) => ({
+        preview: p,
+        file: files[i],
+        chatRoom: p.chatRoom,
+        chatType: p.detectedType,
+        notes: '',
+      }));
+      setItems((prev) => [...prev, ...next]);
+      setStep('preview');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setStep('upload');
+    }
+  }
+
+  async function submitIngest() {
+    if (!selfName.trim() || items.length === 0) return;
+    setStep('submitting');
+    setError(null);
+
+    const fd = new FormData();
+    const meta: { selfName: string; files: IngestFileMeta[] } = {
+      selfName: selfName.trim(),
+      files: items.map((it) => ({
+        filename: it.preview.filename,
+        chatRoom: it.chatRoom.trim() || it.preview.filename,
+        chatType: it.chatType,
+        notes: it.notes.trim() || undefined,
+      })),
+    };
+    fd.append('meta', JSON.stringify(meta));
+    for (const it of items) fd.append('files', it.file);
+
+    try {
+      const res = await fetch('/api/ingest', { method: 'POST', body: fd });
+      if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(`ingest ${res.status}: ${txt}`);
+      }
+      const result = (await res.json()) as IngestResponse;
+      sessionStorage.setItem('ingest_result', JSON.stringify(result));
+      router.push('/onboarding/process');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setStep('preview');
+    }
   }
 
   return (
@@ -25,34 +106,151 @@ export default function OnboardingPage() {
         <h1 className="text-2xl tracking-tight">先把你的對話交給它</h1>
         <p className="text-sm text-neutral-600">
           上傳 LINE 匯出的 <code className="font-mono">.txt</code>{' '}
-          檔。處理完成後原始檔案會在 24 小時內被刪除，只保留結構化資料。
+          檔。原始檔案會在處理完成後 24 小時內刪除，只保留結構化資料。
         </p>
       </header>
 
-      <FileDropzone onFiles={(fs) => setFiles((prev) => [...prev, ...fs])} />
-
-      {files.length > 0 ? (
-        <ul className="space-y-1 text-sm text-neutral-700">
-          {files.map((f, i) => (
-            <li key={i} className="flex justify-between">
-              <span>{f.name}</span>
-              <span className="text-neutral-400">
-                {(f.size / 1024).toFixed(1)} KB
-              </span>
-            </li>
-          ))}
-        </ul>
+      {error ? (
+        <div className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
+          {error}
+        </div>
       ) : null}
 
-      <div className="flex justify-end">
-        <button
-          onClick={handleSubmit}
-          disabled={files.length === 0 || submitting}
-          className="rounded-md bg-neutral-900 px-4 py-2 text-sm text-white disabled:opacity-40"
-        >
-          {submitting ? '處理中…' : '開始處理'}
-        </button>
-      </div>
+      {step === 'upload' ? (
+        <FileDropzone onFiles={handleFiles} />
+      ) : null}
+
+      {step !== 'upload' && items.length > 0 ? (
+        <>
+          <ul className="space-y-3">
+            {items.map((it, i) => (
+              <li
+                key={i}
+                className="space-y-2 rounded-md border border-neutral-200 bg-white p-3"
+              >
+                <div className="flex items-baseline justify-between text-xs text-neutral-500">
+                  <span className="font-mono">{it.preview.filename}</span>
+                  <span>
+                    {it.preview.messageCount.toLocaleString()} 筆 ·{' '}
+                    {(it.preview.fileSize / 1024).toFixed(1)} KB
+                  </span>
+                </div>
+
+                <label className="block text-xs text-neutral-500">
+                  聊天室名稱
+                  <input
+                    value={it.chatRoom}
+                    onChange={(e) =>
+                      setItems((prev) =>
+                        prev.map((x, j) =>
+                          j === i ? { ...x, chatRoom: e.target.value } : x
+                        )
+                      )
+                    }
+                    className="mt-1 block w-full rounded border border-neutral-300 px-2 py-1 text-sm text-neutral-900"
+                  />
+                </label>
+
+                <div className="flex gap-4 text-xs text-neutral-500">
+                  <label className="flex items-center gap-1">
+                    <input
+                      type="radio"
+                      name={`type-${i}`}
+                      checked={it.chatType === 'private'}
+                      onChange={() =>
+                        setItems((prev) =>
+                          prev.map((x, j) =>
+                            j === i ? { ...x, chatType: 'private' } : x
+                          )
+                        )
+                      }
+                    />
+                    一對一
+                  </label>
+                  <label className="flex items-center gap-1">
+                    <input
+                      type="radio"
+                      name={`type-${i}`}
+                      checked={it.chatType === 'group'}
+                      onChange={() =>
+                        setItems((prev) =>
+                          prev.map((x, j) =>
+                            j === i ? { ...x, chatType: 'group' } : x
+                          )
+                        )
+                      }
+                    />
+                    群組
+                  </label>
+                  <span className="ml-auto text-neutral-400">
+                    {it.preview.speakers
+                      .slice(0, 3)
+                      .map((s) => `${s.name}（${s.messageCount}）`)
+                      .join(' · ')}
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ul>
+
+          <section className="space-y-2 border-t border-neutral-200 pt-4">
+            <label className="block text-xs text-neutral-500">
+              在 LINE 上你顯示的名字
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {speakerOptions.slice(0, 6).map((s) => (
+                <button
+                  key={s.name}
+                  type="button"
+                  onClick={() => setSelfName(s.name)}
+                  className={`rounded-full border px-3 py-1 text-xs transition ${
+                    selfName === s.name
+                      ? 'border-neutral-900 bg-neutral-900 text-white'
+                      : 'border-neutral-300 text-neutral-700 hover:border-neutral-500'
+                  }`}
+                >
+                  {s.name}
+                  <span className="ml-1 text-[10px] opacity-60">
+                    {s.count.toLocaleString()}
+                  </span>
+                </button>
+              ))}
+            </div>
+            <input
+              value={selfName}
+              onChange={(e) => setSelfName(e.target.value)}
+              placeholder="或自行輸入"
+              className="block w-full rounded border border-neutral-300 px-2 py-1 text-sm"
+            />
+          </section>
+
+          <div className="flex items-center justify-between">
+            <button
+              type="button"
+              onClick={() => {
+                setItems([]);
+                setSelfName('');
+                setStep('upload');
+              }}
+              className="text-xs text-neutral-500 hover:text-neutral-900"
+            >
+              重新選擇
+            </button>
+            <button
+              type="button"
+              onClick={submitIngest}
+              disabled={
+                !selfName.trim() ||
+                items.length === 0 ||
+                step === 'submitting'
+              }
+              className="rounded-md bg-neutral-900 px-4 py-2 text-sm text-white disabled:opacity-40"
+            >
+              {step === 'submitting' ? '處理中…' : '開始處理'}
+            </button>
+          </div>
+        </>
+      ) : null}
     </>
   );
 }
