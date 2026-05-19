@@ -1,9 +1,11 @@
 'use client';
 
 import { Canvas } from '@react-three/fiber';
-import { Suspense } from 'react';
+import { Suspense, useMemo } from 'react';
 import { Scene } from './Scene';
 import { PostFX } from './PostFX';
+import { useReducedMotion } from './hooks/useReducedMotion';
+import { useDocumentVisible } from './hooks/useDocumentVisible';
 
 interface CookieShellProps {
   /** 'hero' 用於 onboarding/landing，'ambient' 用於 chat 背景 */
@@ -15,11 +17,25 @@ export function CookieShell({
   variant = 'hero',
   className,
 }: CookieShellProps) {
+  const reducedMotion = useReducedMotion();
+  const visible = useDocumentVisible();
+
+  // Tab 隱藏時暫停 R3F frame loop；reduced motion 也走 demand-only。
+  const frameloop = useMemo<'always' | 'demand' | 'never'>(() => {
+    if (!visible) return 'never';
+    if (reducedMotion) return 'demand';
+    return 'always';
+  }, [reducedMotion, visible]);
+
+  const isMobile =
+    typeof navigator !== 'undefined' && /Mobi/i.test(navigator.userAgent);
+
   return (
     <div className={className}>
       <Canvas
         camera={{ position: [0, 0, 5], fov: 35 }}
-        dpr={[1, 2]}
+        dpr={isMobile ? [1, 1.5] : [1, 2]}
+        frameloop={frameloop}
         gl={{
           antialias: true,
           alpha: true,
@@ -29,8 +45,12 @@ export function CookieShell({
         <color attach="background" args={['#F4F4F0']} />
         <fog attach="fog" args={['#F4F4F0', 8, 14]} />
         <Suspense fallback={null}>
-          <Scene variant={variant} />
-          <PostFX />
+          <Scene
+            variant={variant}
+            reducedMotion={reducedMotion}
+            isMobile={isMobile}
+          />
+          {reducedMotion ? null : <PostFX />}
         </Suspense>
       </Canvas>
     </div>

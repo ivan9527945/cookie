@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useChat } from '@/hooks/useChat';
 import { MessageBubble } from './MessageBubble';
 import { SystemMessage } from './SystemMessage';
+import { GlitchText } from '@/components/shared/GlitchText';
 import { useCookieState } from '@/components/cookie-shell/hooks/useCookieState';
 import type { RetrievedCount } from '@/types/chat';
 
@@ -36,7 +37,9 @@ export function ChatWindow() {
       />
 
       <SystemMessage>
-        這是一個用你的文字訓練出來的模仿物。它知道你說過的話，但它不是你。
+        <GlitchText intensity={0.4}>
+          這是一個用你的文字訓練出來的模仿物。它知道你說過的話，但它不是你。
+        </GlitchText>
       </SystemMessage>
 
       <div className="flex-1 space-y-3 overflow-y-auto pr-2">

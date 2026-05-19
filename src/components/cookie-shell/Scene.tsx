@@ -6,9 +6,31 @@ import { ParticleField } from './ParticleField';
 
 interface SceneProps {
   variant: 'hero' | 'ambient';
+  reducedMotion?: boolean;
+  isMobile?: boolean;
 }
 
-export function Scene({ variant }: SceneProps) {
+export function Scene({
+  variant,
+  reducedMotion = false,
+  isMobile = false,
+}: SceneProps) {
+  const particleCount = isMobile
+    ? variant === 'hero'
+      ? 500
+      : 300
+    : variant === 'hero'
+      ? 1200
+      : 600;
+
+  const floatProps = reducedMotion
+    ? { speed: 0, rotationIntensity: 0, floatIntensity: 0 }
+    : {
+        speed: 1.2,
+        rotationIntensity: variant === 'hero' ? 0.4 : 0.15,
+        floatIntensity: variant === 'hero' ? 0.6 : 0.3,
+      };
+
   return (
     <>
       <ambientLight intensity={0.4} />
@@ -22,13 +44,9 @@ export function Scene({ variant }: SceneProps) {
 
       <Environment preset="studio" environmentIntensity={0.6} />
 
-      <Float
-        speed={1.2}
-        rotationIntensity={variant === 'hero' ? 0.4 : 0.15}
-        floatIntensity={variant === 'hero' ? 0.6 : 0.3}
-      >
+      <Float {...floatProps}>
         <Egg />
-        <ParticleField count={variant === 'hero' ? 1200 : 600} />
+        <ParticleField count={particleCount} />
       </Float>
     </>
   );
