@@ -28,6 +28,9 @@ pnpm dev
 
 開啟 [http://localhost:3000](http://localhost:3000)。
 
+> Postgres 在 host 上開 **5433** 埠（避免與 Homebrew/系統 postgres 衝突）。
+> Qdrant 6333、Redis 6379。詳見 `docker-compose.yml`。
+
 ## 文件
 
 - [專案理念](docs/00-project-philosophy.md)

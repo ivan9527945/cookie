@@ -1,8 +1,9 @@
 services:
   postgres:
     image: pgvector/pgvector:pg16
+    # NOTE: 主機端用 5433（避免和 Homebrew/系統 postgres 衝突）
     ports:
-      - '5432:5432'
+      - '5433:5432'
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
