@@ -4,19 +4,24 @@ declare global {
   var __anthropic: Anthropic | undefined;
 }
 
-function createClient(): Anthropic {
+function getClient(): Anthropic {
+  if (global.__anthropic) return global.__anthropic;
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     throw new Error('ANTHROPIC_API_KEY is not set');
   }
-  return new Anthropic({ apiKey });
+  const client = new Anthropic({ apiKey });
+  if (process.env.NODE_ENV !== 'production') {
+    global.__anthropic = client;
+  }
+  return client;
 }
 
-export const anthropic: Anthropic = global.__anthropic ?? createClient();
-
-if (process.env.NODE_ENV !== 'production') {
-  global.__anthropic = anthropic;
-}
+export const anthropic = new Proxy({} as Anthropic, {
+  get(_target, prop, receiver) {
+    return Reflect.get(getClient(), prop, receiver);
+  },
+}) as Anthropic;
 
 export const MODELS = {
   /** 主要對話模型 */
