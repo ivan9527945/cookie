@@ -103,6 +103,25 @@ const FIXTURES: Fixture[] = [
     },
   },
   {
+    name: '新版 iOS 匯出：點分隔日期 + 無方括號媒體 token + 無聊天室標題',
+    selfName: 'Ivan',
+    raw: `2022.04.14 星期四
+12:14 GAY 你今天要練？
+12:45 Ivan 剛好要
+12:45 Ivan 你要練嗎
+13:30 Ivan 貼圖
+13:50 GAY 圖片
+13:52 Ivan 那你先練
+`,
+    expect: {
+      chatRoom: null,
+      detectedType: 'private',
+      messageCountAtLeast: 6,
+      speakerCount: 2,
+      seenTypes: ['text', 'sticker', 'image'],
+    },
+  },
+  {
     name: '[影片] 與 [檔案] 標記',
     selfName: 'Satoshi',
     raw: `[LINE] 與 媽 的聊天紀錄

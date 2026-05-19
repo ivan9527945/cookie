@@ -1,7 +1,21 @@
 import type { LineMessage, ParseOptions } from '@/types/line';
 
-const DATE_LINE = /^(\d{4})[/-](\d{1,2})[/-](\d{1,2}).*$/;
+const DATE_LINE = /^(\d{4})[/.\-](\d{1,2})[/.\-](\d{1,2}).*$/;
 const MSG_LINE = /^(\d{1,2}):(\d{2})\s+(.+?)\s+(.+)$/;
+
+const MEDIA_TOKENS: Record<string, LineMessage['type']> = {
+  '[貼圖]': 'sticker',
+  貼圖: 'sticker',
+  '[照片]': 'image',
+  照片: 'image',
+  圖片: 'image',
+  '[影片]': 'video',
+  影片: 'video',
+  '[檔案]': 'file',
+  檔案: 'file',
+  '[語音訊息]': 'voice',
+  語音訊息: 'voice',
+};
 
 export function parseLineTxt(raw: string, opts: ParseOptions): LineMessage[] {
   const cleaned = raw.replace(/^\uFEFF/, '');
@@ -59,12 +73,10 @@ function buildMessage(
   let type: LineMessage['type'] = 'text';
   let content = rawContent.trim();
 
-  if (content === '[貼圖]') type = 'sticker';
-  else if (content === '[照片]') type = 'image';
-  else if (content === '[影片]') type = 'video';
-  else if (content === '[檔案]') type = 'file';
-  else if (content === '[語音訊息]') type = 'voice';
-  else if (/^https?:\/\//.test(content)) {
+  const mediaType = MEDIA_TOKENS[content];
+  if (mediaType) {
+    type = mediaType;
+  } else if (/^https?:\/\//.test(content)) {
     type = 'url';
     content = '<URL>';
   } else if (content === '已收回訊息' || content.startsWith('☎')) {

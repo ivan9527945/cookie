@@ -21,7 +21,7 @@ export interface FileMetadata {
 }
 
 const TITLE_LINE = /^\[LINE\]\s+(?:與|Chat with)\s+(.+?)\s+(?:的聊天紀錄|chat history)/i;
-const DATE_LINE = /^(\d{4})[/-](\d{1,2})[/-](\d{1,2})/;
+const DATE_LINE = /^(\d{4})[/.\-](\d{1,2})[/.\-](\d{1,2})/;
 const MSG_LINE = /^(\d{1,2}):(\d{2})\s+(.+?)\s+(.+)$/;
 
 export function extractFileMetadata(raw: string): FileMetadata {
