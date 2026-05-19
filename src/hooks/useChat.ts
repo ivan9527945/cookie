@@ -1,41 +1,53 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useCookieState } from '@/components/cookie-shell/hooks/useCookieState';
-import type { ChatTurn } from '@/types/chat';
+import type {
+  ChatHistoryMessage,
+  ChatHistoryResponse,
+  RetrievedCount,
+} from '@/types/chat';
 
 export interface UseChatReturn {
-  history: ChatTurn[];
+  history: ChatHistoryMessage[];
   pending: string;
+  pendingRetrieved: RetrievedCount | null;
   isStreaming: boolean;
   error: string | null;
+  sessionId: string | null;
   send: (text: string) => Promise<void>;
+  cancel: () => void;
+  newSession: () => Promise<void>;
 }
 
 export function useChat(): UseChatReturn {
   const setMode = useCookieState((s) => s.setMode);
   const pulse = useCookieState((s) => s.pulse);
 
-  const [history, setHistory] = useState<ChatTurn[]>([]);
+  const [history, setHistory] = useState<ChatHistoryMessage[]>([]);
   const [pending, setPending] = useState('');
+  const [pendingRetrieved, setPendingRetrieved] =
+    useState<RetrievedCount | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
-  // Initial load: 恢復這個 session 的歷史
-  useEffect(() => {
-    let cancelled = false;
-    fetch('/api/chat/history')
-      .then((r) => (r.ok ? r.json() : { messages: [] }))
-      .then((data: { messages: ChatTurn[] }) => {
-        if (!cancelled) setHistory(data.messages);
-      })
-      .catch(() => {
-        /* ignore */
-      });
-    return () => {
-      cancelled = true;
-    };
+  const loadHistory = useCallback(async () => {
+    try {
+      const res = await fetch('/api/chat/history');
+      if (!res.ok) return;
+      const data = (await res.json()) as ChatHistoryResponse;
+      setHistory(data.messages);
+      setSessionId(data.session?.id ?? null);
+    } catch {
+      /* ignore */
+    }
   }, []);
+
+  useEffect(() => {
+    void loadHistory();
+  }, [loadHistory]);
 
   const send = useCallback(
     async (text: string) => {
@@ -43,15 +55,25 @@ export function useChat(): UseChatReturn {
       if (!trimmed || isStreaming) return;
 
       setError(null);
-      setHistory((h) => [...h, { role: 'user', content: trimmed }]);
+      const userMessage: ChatHistoryMessage = {
+        id: `local-${Date.now()}`,
+        role: 'user',
+        content: trimmed,
+        timestamp: new Date().toISOString(),
+      };
+      setHistory((h) => [...h, userMessage]);
       setIsStreaming(true);
       setMode('thinking');
+
+      const controller = new AbortController();
+      abortRef.current = controller;
 
       try {
         const res = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ message: trimmed }),
+          signal: controller.signal,
         });
 
         if (!res.ok) {
@@ -68,25 +90,63 @@ export function useChat(): UseChatReturn {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-          const chunk = decoder.decode(value, { stream: true });
-          buffer += chunk;
+          buffer += decoder.decode(value, { stream: true });
           pulse();
           setPending(buffer);
         }
-
-        // 最後再 decode 一次清空 buffer
         buffer += decoder.decode();
-        setHistory((h) => [...h, { role: 'assistant', content: buffer }]);
+
+        // 串流結束後 reload history，把 retrievedCount 等 server 端的權威值帶回來
+        await loadHistory();
         setPending('');
+        setPendingRetrieved(null);
       } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
+        if (err instanceof DOMException && err.name === 'AbortError') {
+          // 中斷：保留 pending 為當前累積值，server 端會自動 persist
+          await loadHistory();
+          setPending('');
+          setPendingRetrieved(null);
+        } else {
+          setError(err instanceof Error ? err.message : String(err));
+        }
       } finally {
+        abortRef.current = null;
         setIsStreaming(false);
         setMode('idle');
       }
     },
-    [isStreaming, pulse, setMode]
+    [isStreaming, loadHistory, pulse, setMode]
   );
 
-  return { history, pending, isStreaming, error, send };
+  const cancel = useCallback(() => {
+    abortRef.current?.abort();
+  }, []);
+
+  const newSession = useCallback(async () => {
+    if (isStreaming) cancel();
+    try {
+      const res = await fetch('/api/chat/session', { method: 'POST' });
+      if (!res.ok) throw new Error(`new session failed: ${res.status}`);
+      const data = (await res.json()) as { id: string; startedAt: string };
+      setSessionId(data.id);
+      setHistory([]);
+      setPending('');
+      setPendingRetrieved(null);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }, [cancel, isStreaming]);
+
+  return {
+    history,
+    pending,
+    pendingRetrieved,
+    isStreaming,
+    error,
+    sessionId,
+    send,
+    cancel,
+    newSession,
+  };
 }

@@ -22,3 +22,14 @@
 [data-glitch]:hover {
   animation: glitch-x 0.4s steps(5) infinite;
 }
+
+@keyframes blink {
+  0%,
+  50% {
+    opacity: 1;
+  }
+  51%,
+  100% {
+    opacity: 0;
+  }
+}

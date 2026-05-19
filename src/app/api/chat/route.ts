@@ -92,12 +92,15 @@ export async function POST(req: NextRequest) {
       const modelUsed = turn.request.model;
 
       try {
-        const sdkStream = anthropic.messages.stream({
-          model: turn.request.model,
-          system: turn.request.system,
-          messages: turn.request.messages,
-          max_tokens: turn.request.max_tokens,
-        });
+        const sdkStream = anthropic.messages.stream(
+          {
+            model: turn.request.model,
+            system: turn.request.system,
+            messages: turn.request.messages,
+            max_tokens: turn.request.max_tokens,
+          },
+          { signal: req.signal }
+        );
 
         for await (const event of sdkStream) {
           if (
@@ -117,13 +120,24 @@ export async function POST(req: NextRequest) {
 
         controller.close();
       } catch (err) {
-        console.error('[chat] stream error', err);
-        controller.error(err);
-        return;
+        const aborted = req.signal?.aborted || isAbortError(err);
+        if (!aborted) {
+          console.error('[chat] stream error', err);
+          controller.error(err);
+          return;
+        }
+        // 使用者中斷：把目前累積的內容保留下來、關閉串流，不視為 error
+        try {
+          controller.close();
+        } catch {
+          /* already closed */
+        }
       }
 
       // 5. 背景：寫 assistant message + audit + episodic extract
+      //    使用者中斷時 fullText 是部分回應；仍然存下來保留上下文。
       void (async () => {
+        if (!fullText) return;
         try {
           await db.chatMessage.create({
             data: {
@@ -145,9 +159,10 @@ export async function POST(req: NextRequest) {
           await writeAudit(user.id, 'chat_session_start', {
             sessionId: session.id,
             tokensUsed,
+            aborted: req.signal?.aborted ?? false,
           });
 
-          // episodic extract（最近 6 筆）— 失敗只 warn
+          // episodic extract（最近 6 筆）— 中斷或失敗都只 warn
           await extractEpisodes(session.id, user.id, [
             ...history.slice(-4),
             { role: 'user', content: body.message },
@@ -169,4 +184,14 @@ export async function POST(req: NextRequest) {
       'Cache-Control': 'no-cache',
     },
   });
+}
+
+function isAbortError(err: unknown): boolean {
+  if (err instanceof Error) {
+    if (err.name === 'AbortError') return true;
+    if ('status' in err && (err as { status?: number }).status === 499) {
+      return true;
+    }
+  }
+  return false;
 }

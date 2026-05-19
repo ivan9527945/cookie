@@ -4,9 +4,11 @@ import type { ChatRole } from '@/types/chat';
 interface Props {
   role: ChatRole;
   content: string;
+  /** 在 streaming 過程中讓 assistant bubble 末端顯示閃爍的 caret */
+  cursor?: boolean;
 }
 
-export function MessageBubble({ role, content }: Props) {
+export function MessageBubble({ role, content, cursor }: Props) {
   const isUser = role === 'user';
   return (
     <div className={cn('flex', isUser ? 'justify-end' : 'justify-start')}>
@@ -19,6 +21,12 @@ export function MessageBubble({ role, content }: Props) {
         )}
       >
         {content}
+        {cursor ? (
+          <span
+            aria-hidden
+            className="ml-0.5 inline-block h-[1em] w-[1px] translate-y-[2px] animate-[blink_1s_steps(1)_infinite] bg-neutral-600"
+          />
+        ) : null}
       </div>
     </div>
   );
