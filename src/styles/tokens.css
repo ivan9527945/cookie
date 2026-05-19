@@ -1,0 +1,18 @@
+/**
+ * 設計 token：與 @theme 互補，未來需要 runtime 切換主題時可在此覆寫。
+ */
+:root {
+  --shell-radius-sm: 8px;
+  --shell-radius-md: 12px;
+  --shell-radius-lg: 20px;
+
+  --shell-spacing-1: 4px;
+  --shell-spacing-2: 8px;
+  --shell-spacing-3: 16px;
+  --shell-spacing-4: 24px;
+  --shell-spacing-5: 32px;
+  --shell-spacing-6: 48px;
+
+  --shell-shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.04),
+    0 4px 16px rgba(0, 0, 0, 0.04);
+}

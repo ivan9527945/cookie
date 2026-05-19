@@ -1,0 +1,247 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  directUrl  = env("DIRECT_URL")
+  extensions = [vector]
+}
+
+// =====================================================
+// User
+// =====================================================
+model User {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String
+  displayName String
+  email       String?  @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  uploadedChats   UploadedChat[]
+  personaProfiles PersonaProfile[]
+  chatSessions    ChatSession[]
+  auditLogs       AuditLog[]
+
+  @@map("users")
+}
+
+// =====================================================
+// LINE 匯入相關
+// =====================================================
+model UploadedChat {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @db.Uuid
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  chatRoom     String
+  chatType     ChatType @default(private)
+  filename     String
+  fileSize     Int
+  messageCount Int      @default(0)
+  notes        String?
+
+  uploadedAt   DateTime  @default(now())
+  /// 原始 .txt 何時被刪除（隱私要求：成功處理後 24h 內）
+  rawDeletedAt DateTime?
+
+  messages LineMessage[]
+  chunks   ConversationChunk[]
+
+  @@index([userId])
+  @@map("uploaded_chats")
+}
+
+enum ChatType {
+  private
+  group
+}
+
+model LineMessage {
+  id             String       @id @default(uuid()) @db.Uuid
+  uploadedChatId String       @db.Uuid
+  uploadedChat   UploadedChat @relation(fields: [uploadedChatId], references: [id], onDelete: Cascade)
+
+  timestamp DateTime
+  speaker   String
+  isYou     Boolean
+  type      MessageType @default(text)
+  content   String      @db.Text
+
+  chunkId String?            @db.Uuid
+  chunk   ConversationChunk? @relation(fields: [chunkId], references: [id], onDelete: SetNull)
+
+  @@index([uploadedChatId, timestamp])
+  @@index([chunkId])
+  @@map("line_messages")
+}
+
+enum MessageType {
+  text
+  sticker
+  image
+  video
+  file
+  voice
+  url
+  system
+}
+
+// =====================================================
+// Chunking + Annotation
+// =====================================================
+model ConversationChunk {
+  id               String       @id @default(uuid()) @db.Uuid
+  uploadedChatId   String       @db.Uuid
+  uploadedChat     UploadedChat @relation(fields: [uploadedChatId], references: [id], onDelete: Cascade)
+
+  startTime        DateTime
+  endTime          DateTime
+  participants     String[]
+  messageCount     Int
+  yourMessageCount Int
+
+  // === 標註結果 ===
+  summary       String?  @db.Text
+  chatType      String?
+  emotionalTone String?
+  yourPosition  String?  @db.Text
+  topics        String[]
+  importance    Int?
+  annotatedAt   DateTime?
+
+  // === Embedding 狀態 ===
+  embeddedAt    DateTime?
+  qdrantPointId String?   @unique
+
+  messages LineMessage[]
+
+  @@index([uploadedChatId])
+  @@index([chatType])
+  @@index([importance])
+  @@map("conversation_chunks")
+}
+
+// =====================================================
+// Persona Profile (versioned)
+// =====================================================
+model PersonaProfile {
+  id              String  @id @default(uuid()) @db.Uuid
+  userId          String  @db.Uuid
+  user            User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  version         Int
+  parentVersionId String? @db.Uuid
+  isActive        Boolean @default(false)
+
+  profile         Json
+  manualOverrides Json?
+
+  basedOnMessages Int
+  generatedAt     DateTime @default(now())
+  generationCost  Decimal?
+  generationModel String?
+
+  @@unique([userId, version])
+  @@index([userId, isActive])
+  @@map("persona_profiles")
+}
+
+// =====================================================
+// 對話 Session + Episodic Memory
+// =====================================================
+model ChatSession {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @db.Uuid
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title        String?
+  startedAt    DateTime  @default(now())
+  endedAt      DateTime?
+  messageCount Int       @default(0)
+
+  messages ChatMessage[]
+  episodes Episode[]
+
+  @@index([userId, startedAt(sort: Desc)])
+  @@map("chat_sessions")
+}
+
+model ChatMessage {
+  id        String      @id @default(uuid()) @db.Uuid
+  sessionId String      @db.Uuid
+  session   ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  role      ChatRole
+  content   String   @db.Text
+  timestamp DateTime @default(now())
+
+  tokensUsed          Int?
+  modelUsed           String?
+  retrievedChunkIds   String[] @db.Uuid
+  retrievedEpisodeIds String[] @db.Uuid
+
+  @@index([sessionId, timestamp])
+  @@map("chat_messages")
+}
+
+enum ChatRole {
+  user
+  assistant
+  system
+}
+
+model Episode {
+  id        String      @id @default(uuid()) @db.Uuid
+  sessionId String      @db.Uuid
+  session   ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  summary          String  @db.Text
+  rawContext       String? @db.Text
+  importance       Int
+  emotionalValence Float?
+
+  qdrantPointId String?   @unique
+  embeddedAt    DateTime?
+
+  /// 與其他 episode 的關聯（記憶網絡）
+  linkedEpisodeIds String[] @db.Uuid
+
+  createdAt DateTime  @default(now())
+  deletedAt DateTime?
+
+  @@index([sessionId])
+  @@index([importance])
+  @@map("episodes")
+}
+
+// =====================================================
+// Audit Log
+// =====================================================
+model AuditLog {
+  id        String      @id @default(uuid()) @db.Uuid
+  userId    String      @db.Uuid
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  action    AuditAction
+  details   Json?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime    @default(now())
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("audit_logs")
+}
+
+enum AuditAction {
+  upload_chat
+  delete_chat
+  generate_persona
+  edit_persona
+  chat_session_start
+  data_export
+  data_purge
+}
