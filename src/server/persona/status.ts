@@ -16,6 +16,8 @@ export interface GenerateStatus {
   totalChunks?: number;
   version?: number;
   message?: string;
+  /** 機器可讀的錯誤代碼，例如 'billing_insufficient'。前端用來決定要不要跳 Dialog。 */
+  code?: string;
   startedAt?: string;
   updatedAt: string;
 }

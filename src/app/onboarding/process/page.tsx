@@ -8,11 +8,22 @@ import {
   useCookieState,
   AWAKENING_DURATION_MS,
 } from '@/components/cookie-shell/hooks/useCookieState';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import type { IngestResponse } from '@/types/ingest';
 import type {
   GenerateStatus,
   GenerateState,
 } from '@/server/persona/status';
+
+const BILLING_INSUFFICIENT_CODE = 'billing_insufficient';
+const ANTHROPIC_BILLING_URL = 'https://console.anthropic.com/settings/billing';
 
 interface Estimate {
   totalChunks: number;
@@ -29,6 +40,7 @@ export default function ProcessPage() {
   const [estimate, setEstimate] = useState<Estimate | null>(null);
   const [status, setStatus] = useState<GenerateStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showBillingDialog, setShowBillingDialog] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -82,6 +94,9 @@ export default function ProcessPage() {
         if (s.state === 'done') {
           // 小延遲讓使用者看到「完成」狀態再跳轉
           setTimeout(() => router.push('/persona'), 1500);
+        } else if (s.code === BILLING_INSUFFICIENT_CODE) {
+          setShowBillingDialog(true);
+          setMode('idle');
         } else {
           setError(s.message ?? 'unknown error');
         }
@@ -231,6 +246,40 @@ export default function ProcessPage() {
           </details>
         ) : null}
       </section>
+
+      <Dialog open={showBillingDialog} onOpenChange={setShowBillingDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Anthropic API 額度不足</DialogTitle>
+            <DialogDescription>
+              生成 persona 需要呼叫 Claude（Haiku 標註、Opus
+              整合）。目前的 API key 餘額已耗盡，請先充值後再重試。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-md bg-neutral-50 px-3 py-2 text-xs text-neutral-600">
+            {status?.message ??
+              '訊息：credit balance is too low to access the Anthropic API.'}
+          </div>
+          <DialogFooter>
+            <button
+              type="button"
+              onClick={() => setShowBillingDialog(false)}
+              className="rounded-full border border-neutral-300 px-4 py-1.5 text-xs text-neutral-600 hover:border-neutral-900 hover:text-neutral-900"
+            >
+              稍後再說
+            </button>
+            <a
+              href={ANTHROPIC_BILLING_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => setShowBillingDialog(false)}
+              className="rounded-full border border-neutral-900 bg-neutral-900 px-4 py-1.5 text-xs text-white hover:opacity-90"
+            >
+              前往 Anthropic 充值
+            </a>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

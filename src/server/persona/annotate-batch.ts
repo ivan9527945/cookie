@@ -1,6 +1,7 @@
 import pLimit from 'p-limit';
 import { db } from '@/lib/db';
 import { annotateChunk } from '@/server/line-parser/annotate';
+import { BillingError } from './errors';
 import { setStatus } from './status';
 import type { LineMessage } from '@/types/line';
 import type { MessageType } from '@prisma/client';
@@ -43,11 +44,14 @@ export async function annotateAllPending(
 
   let done = alreadyDone;
   let failed = 0;
+  let billingError: BillingError | null = null;
   const limit = pLimit(ANNOTATE_CONCURRENCY);
 
   await Promise.all(
     pending.map((chunk) =>
       limit(async () => {
+        // 已偵測到 billing error：後續排隊中的請求直接 bail，避免再撞 400
+        if (billingError) return;
         try {
           const lineMessages: LineMessage[] = chunk.messages.map((m) => ({
             timestamp: m.timestamp,
@@ -88,6 +92,10 @@ export async function annotateAllPending(
 
           done += 1;
         } catch (err) {
+          if (err instanceof BillingError) {
+            billingError = err;
+            return;
+          }
           failed += 1;
           console.warn('[annotate-batch] chunk failed', chunk.id, err);
         } finally {
@@ -100,6 +108,8 @@ export async function annotateAllPending(
       })
     )
   );
+
+  if (billingError) throw billingError;
 
   return { total, annotated: done, failed };
 }

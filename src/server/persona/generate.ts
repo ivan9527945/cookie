@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import { db } from '@/lib/db';
 import { writeAudit } from '@/server/audit';
 import { annotateAllPending } from './annotate-batch';
+import { BillingError, isAnthropicBillingMessage } from './errors';
 import { extractPersona } from './extract';
 import { setStatus } from './status';
 import { embedAllPending } from '@/server/memory/embed-chunks';
@@ -31,6 +32,28 @@ export async function runPersonaPipeline(
   const startedAt = new Date().toISOString();
   setStatus(userId, { state: 'annotating', startedAt });
 
+  try {
+    return await runPipelineInner(userId, yourName);
+  } catch (err) {
+    // annotate-batch 已把餘額不足包成 BillingError；extract 階段如果也撞到，
+    // Anthropic SDK 會丟原始錯誤訊息 — 在這裡統一比對訊息字串。
+    if (err instanceof BillingError || isAnthropicBillingMessage(err)) {
+      const msg =
+        err instanceof BillingError ? err.message : new BillingError().message;
+      setStatus(userId, {
+        state: 'error',
+        code: BillingError.CODE,
+        message: msg,
+      });
+    }
+    throw err;
+  }
+}
+
+async function runPipelineInner(
+  userId: string,
+  yourName: string
+): Promise<PersonaGenerateResult> {
   const annotateResult = await annotateAllPending(userId, yourName);
 
   const usable = await db.conversationChunk.findMany({

@@ -1,4 +1,8 @@
 import { anthropic, MODELS } from '@/lib/anthropic';
+import {
+  BillingError,
+  isAnthropicBillingMessage,
+} from '@/server/persona/errors';
 import type { ChunkAnnotation, ConversationChunk } from '@/types/line';
 
 const ANNOTATION_PROMPT = `你是一個對話分析助手，任務是分析使用者在 LINE 對話中的言行，協助建立人格畫像。
@@ -87,6 +91,10 @@ export async function annotateChunk(
         chunk.endTime
       );
     } catch (err) {
+      // 餘額不足 → 重試也沒用，直接拋 BillingError 讓上層 abort 整個 batch
+      if (isAnthropicBillingMessage(err)) {
+        throw new BillingError();
+      }
       lastErr = err;
       const delay = 1000 * 2 ** attempt;
       await new Promise((r) => setTimeout(r, delay));
