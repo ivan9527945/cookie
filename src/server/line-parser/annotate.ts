@@ -21,18 +21,21 @@ JSON schema：
 - 3-4：日常閒聊但有個性展現
 - 1-2：純資訊交換、無個性展現（餐廳訂位、確認時間等）`;
 
-export async function annotateChunk(
-  chunk: ConversationChunk,
-  yourName: string
-): Promise<ChunkAnnotation> {
-  const dialogue = chunk.messages
-    .map((m) =>
-      `${m.isYou ? `[${yourName}]` : `[${m.speaker}]`} ${
-        m.type === 'text' ? m.content : `<${m.type}>`
-      }`
-    )
-    .join('\n');
+/** Claude 偶爾還是會包 ```json ... ``` 進來，先剝乾淨 */
+function stripFences(text: string): string {
+  return text
+    .trim()
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .trim();
+}
 
+async function callAnnotate(
+  dialogue: string,
+  yourName: string,
+  start: Date,
+  end: Date
+): Promise<ChunkAnnotation> {
   const res = await anthropic.messages.create({
     model: MODELS.light,
     max_tokens: 500,
@@ -40,7 +43,7 @@ export async function annotateChunk(
     messages: [
       {
         role: 'user',
-        content: `以下是 ${yourName} 與他人的一段對話（${chunk.startTime.toISOString()} ~ ${chunk.endTime.toISOString()}）：
+        content: `以下是 ${yourName} 與他人的一段對話（${start.toISOString()} ~ ${end.toISOString()}）：
 
 ${dialogue}
 
@@ -49,6 +52,47 @@ ${dialogue}
     ],
   });
 
-  const text = res.content[0].type === 'text' ? res.content[0].text : '';
-  return JSON.parse(text.trim()) as ChunkAnnotation;
+  const raw = res.content[0].type === 'text' ? res.content[0].text : '';
+  const parsed = JSON.parse(stripFences(raw)) as ChunkAnnotation & {
+    yourPosition: string | null;
+  };
+  return {
+    ...parsed,
+    yourPosition: parsed.yourPosition ?? undefined,
+  };
+}
+
+export async function annotateChunk(
+  chunk: ConversationChunk,
+  yourName: string,
+  options: { maxRetries?: number } = {}
+): Promise<ChunkAnnotation> {
+  const { maxRetries = 3 } = options;
+  const dialogue = chunk.messages
+    .map(
+      (m) =>
+        `${m.isYou ? `[${yourName}]` : `[${m.speaker}]`} ${
+          m.type === 'text' ? m.content : `<${m.type}>`
+        }`
+    )
+    .join('\n');
+
+  let lastErr: unknown = null;
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await callAnnotate(
+        dialogue,
+        yourName,
+        chunk.startTime,
+        chunk.endTime
+      );
+    } catch (err) {
+      lastErr = err;
+      const delay = 1000 * 2 ** attempt;
+      await new Promise((r) => setTimeout(r, delay));
+    }
+  }
+  throw lastErr instanceof Error
+    ? lastErr
+    : new Error(`annotateChunk failed after ${maxRetries} attempts`);
 }
