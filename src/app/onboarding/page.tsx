@@ -101,7 +101,7 @@ export default function OnboardingPage() {
   }
 
   return (
-    <>
+    <div className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-6 py-16">
       <header className="space-y-3">
         <h1 className="text-2xl tracking-tight">先把你的對話交給它</h1>
         <p className="text-sm text-neutral-600">
@@ -251,6 +251,6 @@ export default function OnboardingPage() {
           </div>
         </>
       ) : null}
-    </>
+    </div>
   );
 }
