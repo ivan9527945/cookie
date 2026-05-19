@@ -77,6 +77,9 @@ model User {
 // =====================================================
 // LINE 匯入相關
 // =====================================================
+// 注意：原始 .txt 檔案**不寫入持久層**。upload 時在 request 記憶體中
+// parse 完即丟棄，DB 只保留結構化的 LineMessage / ConversationChunk。
+// 這是比「24h 內刪除」更強的隱私保證，也避免額外的儲存與刪除排程。
 model UploadedChat {
   id          String     @id @default(uuid()) @db.Uuid
   userId      String     @db.Uuid
@@ -90,8 +93,6 @@ model UploadedChat {
   notes       String?                                   // 使用者備註
 
   uploadedAt  DateTime   @default(now())
-  /// 原始 .txt 何時被刪除（隱私要求：成功處理後 24h 內）
-  rawDeletedAt DateTime?
 
   messages    LineMessage[]
   chunks      ConversationChunk[]

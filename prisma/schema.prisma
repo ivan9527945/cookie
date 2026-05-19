@@ -33,9 +33,9 @@ model User {
 // LINE 匯入相關
 // =====================================================
 model UploadedChat {
-  id           String   @id @default(uuid()) @db.Uuid
-  userId       String   @db.Uuid
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   chatRoom     String
   chatType     ChatType @default(private)
@@ -44,9 +44,7 @@ model UploadedChat {
   messageCount Int      @default(0)
   notes        String?
 
-  uploadedAt   DateTime  @default(now())
-  /// 原始 .txt 何時被刪除（隱私要求：成功處理後 24h 內）
-  rawDeletedAt DateTime?
+  uploadedAt DateTime @default(now())
 
   messages LineMessage[]
   chunks   ConversationChunk[]
@@ -94,9 +92,9 @@ enum MessageType {
 // Chunking + Annotation
 // =====================================================
 model ConversationChunk {
-  id               String       @id @default(uuid()) @db.Uuid
-  uploadedChatId   String       @db.Uuid
-  uploadedChat     UploadedChat @relation(fields: [uploadedChatId], references: [id], onDelete: Cascade)
+  id             String       @id @default(uuid()) @db.Uuid
+  uploadedChatId String       @db.Uuid
+  uploadedChat   UploadedChat @relation(fields: [uploadedChatId], references: [id], onDelete: Cascade)
 
   startTime        DateTime
   endTime          DateTime
@@ -105,10 +103,10 @@ model ConversationChunk {
   yourMessageCount Int
 
   // === 標註結果 ===
-  summary       String?  @db.Text
+  summary       String?   @db.Text
   chatType      String?
   emotionalTone String?
-  yourPosition  String?  @db.Text
+  yourPosition  String?   @db.Text
   topics        String[]
   importance    Int?
   annotatedAt   DateTime?
@@ -129,9 +127,9 @@ model ConversationChunk {
 // Persona Profile (versioned)
 // =====================================================
 model PersonaProfile {
-  id              String  @id @default(uuid()) @db.Uuid
-  userId          String  @db.Uuid
-  user            User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   version         Int
   parentVersionId String? @db.Uuid
@@ -154,9 +152,9 @@ model PersonaProfile {
 // 對話 Session + Episodic Memory
 // =====================================================
 model ChatSession {
-  id           String    @id @default(uuid()) @db.Uuid
-  userId       String    @db.Uuid
-  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   title        String?
   startedAt    DateTime  @default(now())
@@ -222,9 +220,9 @@ model Episode {
 // Audit Log
 // =====================================================
 model AuditLog {
-  id        String      @id @default(uuid()) @db.Uuid
-  userId    String      @db.Uuid
-  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   action    AuditAction
   details   Json?

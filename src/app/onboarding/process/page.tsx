@@ -4,7 +4,10 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { DynamicCookieShell } from '@/components/cookie-shell/dynamic';
-import { useCookieState } from '@/components/cookie-shell/hooks/useCookieState';
+import {
+  useCookieState,
+  AWAKENING_DURATION_MS,
+} from '@/components/cookie-shell/hooks/useCookieState';
 import type { IngestResponse } from '@/types/ingest';
 import type {
   GenerateStatus,
@@ -38,7 +41,8 @@ export default function ProcessPage() {
       }
     }
     setMode('awakening');
-    const t = setTimeout(() => setMode('idle'), 4000);
+    // 對齊 store 的動畫總時長；加 200ms 緩衝，讓蛋形最後 smoothstep 完整跑完
+    const t = setTimeout(() => setMode('idle'), AWAKENING_DURATION_MS + 200);
     return () => {
       clearTimeout(t);
       setMode('idle');

@@ -79,9 +79,8 @@ cookie/
 │   └── seed.ts
 │
 ├── public/
-│   ├── fonts/
-│   ├── shaders/                    # GLSL files (可選, 也可 inline)
-│   └── sounds/                     # ambient hum, glitch sfx
+│   └── sounds/                     # 保留給 awakening sfx 用，目前未實作
+│                                   # （字型走 next/font/google；shader 內嵌於 components/cookie-shell/shaders/egg.ts）
 │
 ├── src/
 │   ├── app/
@@ -100,34 +99,61 @@ cookie/
 │   │   │   └── page.tsx
 │   │   │
 │   │   ├── persona/
-│   │   │   └── page.tsx            # 人格剖面頁
+│   │   │   └── page.tsx            # 人格剖面頁（含 overrides 編輯與版本切換）
+│   │   │
+│   │   ├── memory/
+│   │   │   └── page.tsx            # 記憶透明度頁（Week 5）
 │   │   │
 │   │   ├── settings/
 │   │   │   └── page.tsx
 │   │   │
 │   │   └── api/
+│   │       ├── health/
+│   │       │   └── route.ts        # GET: Railway healthcheck
 │   │       ├── ingest/
-│   │       │   └── route.ts        # POST: 接收 LINE .txt, 解析入庫
+│   │       │   ├── route.ts        # POST: 接收 LINE .txt, 解析入庫
+│   │       │   └── preview/
+│   │       │       └── route.ts    # POST: parse 預覽 + chatRoom 自動偵測
 │   │       ├── persona/
-│   │       │   ├── route.ts        # GET: 取得 persona profile
-│   │       │   └── generate/
-│   │       │       └── route.ts    # POST: 觸發 persona 生成
+│   │       │   ├── route.ts        # GET: 取得 active persona profile
+│   │       │   ├── generate/
+│   │       │   │   └── route.ts    # POST: 觸發 persona pipeline
+│   │       │   ├── estimate/
+│   │       │   │   └── route.ts    # GET: 預估成本 / 時間
+│   │       │   ├── status/
+│   │       │   │   └── route.ts    # GET: pipeline 進度（SSE / polling）
+│   │       │   ├── versions/
+│   │       │   │   └── route.ts    # GET: 列出所有 persona 版本
+│   │       │   ├── activate/
+│   │       │   │   └── route.ts    # POST: 切換 active 版本
+│   │       │   └── overrides/
+│   │       │       └── route.ts    # PUT: 寫入手動覆寫
 │   │       ├── chat/
-│   │       │   └── route.ts        # POST: 對話入口（streaming）
+│   │       │   ├── route.ts        # POST: 對話入口（streaming）
+│   │       │   ├── session/
+│   │       │   │   └── route.ts    # GET/POST: session 管理
+│   │       │   └── history/
+│   │       │       └── route.ts    # GET: 對話歷史
 │   │       └── memory/
 │   │           └── route.ts        # GET / DELETE: 記憶管理
 │   │
 │   ├── components/
-│   │   ├── ui/                     # shadcn/ui 元件
+│   │   ├── ui/                     # shadcn/ui 元件（按需引入，目前未使用）
 │   │   ├── cookie-shell/           # Cookie 主視覺（R3F）
-│   │   │   ├── CookieShell.tsx
-│   │   │   ├── EggGeometry.tsx
-│   │   │   ├── ParticleField.tsx
+│   │   │   ├── CookieShell.tsx     # 對外入口（含 Canvas）
+│   │   │   ├── Scene.tsx           # 燈光 / 環境 / Float
+│   │   │   ├── Egg.tsx             # 蛋形主體
+│   │   │   ├── ParticleField.tsx   # 內部粒子
+│   │   │   ├── PostFX.tsx          # 後製效果鏈
+│   │   │   ├── dynamic.tsx         # next/dynamic ssr:false 包裝
+│   │   │   ├── index.ts
 │   │   │   ├── shaders/
-│   │   │   │   ├── egg.vert.glsl
-│   │   │   │   └── egg.frag.glsl
+│   │   │   │   └── egg.ts          # GLSL 字串（vertex + fragment）
 │   │   │   └── hooks/
-│   │   │       └── useCookieState.ts
+│   │   │       ├── useCookieState.ts
+│   │   │       ├── useBreathing.ts
+│   │   │       ├── useDocumentVisible.ts
+│   │   │       └── useReducedMotion.ts
 │   │   ├── chat/
 │   │   │   ├── ChatWindow.tsx
 │   │   │   ├── MessageBubble.tsx
@@ -149,25 +175,38 @@ cookie/
 │   │   └── utils.ts                # cn(), 等
 │   │
 │   ├── server/                     # 純後端邏輯（不能被 client import）
+│   │   ├── user.ts                 # 取/建立 active user
+│   │   ├── audit.ts                # AuditLog 寫入 helper
 │   │   ├── line-parser/
 │   │   │   ├── parse.ts            # LINE .txt → LineMessage[]
 │   │   │   ├── chunk.ts            # 對話分塊
-│   │   │   └── annotate.ts         # LLM 自動標註
+│   │   │   ├── annotate.ts         # LLM 自動標註（含 retry）
+│   │   │   ├── metadata.ts         # 從第一行抓 chatRoom / chatType
+│   │   │   └── persist.ts          # 寫進 UploadedChat + Chunk + Message
 │   │   ├── persona/
-│   │   │   ├── extract.ts          # 從對話抽取 persona profile
-│   │   │   ├── prompts.ts          # persona 抽取的 prompt templates
-│   │   │   └── update.ts           # 增量更新 persona
+│   │   │   ├── extract.ts          # map-reduce persona extraction
+│   │   │   ├── annotate-batch.ts   # 對 pending chunks 併發跑 annotate
+│   │   │   ├── generate.ts         # 完整 pipeline（annotate→extract→寫入版本）
+│   │   │   ├── status.ts           # in-memory status store
+│   │   │   ├── overrides.ts        # apply / parse manualOverrides
+│   │   │   ├── update.ts           # getActivePersona / 版本切換 / overrides 寫入
+│   │   │   └── prompts.ts          # persona 抽取的 prompt templates
 │   │   ├── memory/
-│   │   │   ├── episodic.ts         # 情境記憶寫入
-│   │   │   ├── retrieve.ts         # RAG 檢索
+│   │   │   ├── episodic.ts         # 對話結束抽取 Episode
+│   │   │   ├── episodes.ts         # Episode 讀取 / 刪除
+│   │   │   ├── embed-chunks.ts     # 批次把 chunk 推進 Qdrant
+│   │   │   ├── retrieve.ts         # RAG 檢索（chunks + episodes 平行）
 │   │   │   └── importance.ts       # 重要性評分
 │   │   └── chat/
-│   │       ├── pipeline.ts         # 完整對話 pipeline
+│   │       ├── session.ts          # active session 管理
+│   │       ├── pipeline.ts         # prepareChatTurn（含 retrieval）
 │   │       └── system-prompt.ts    # 動態組裝 system prompt
 │   │
 │   ├── types/
 │   │   ├── line.ts                 # LINE 訊息相關型別
-│   │   ├── persona.ts              # Persona profile 型別
+│   │   ├── ingest.ts               # 上傳 / 預覽 payload 型別
+│   │   ├── persona.ts              # Persona profile Zod schema
+│   │   ├── persona-overrides.ts    # manualOverrides Zod schema
 │   │   ├── memory.ts               # 記憶相關型別
 │   │   └── chat.ts                 # 對話相關型別
 │   │
@@ -176,13 +215,14 @@ cookie/
 │   │   └── glitch.css              # glitch 效果
 │   │
 │   └── hooks/
-│       ├── useChat.ts              # 對話 hook (streaming)
+│       ├── useChat.ts              # 對話 hook (streaming + abort)
 │       ├── useTypewriter.ts
 │       └── usePersona.ts
 │
 └── scripts/
     ├── seed-test-data.ts
-    └── reset-vector-db.ts
+    ├── reset-vector-db.ts
+    └── init-qdrant.ts              # 冪等建立 chunks/episodes collection
 ```
 
 ---
@@ -265,8 +305,9 @@ cookie/
 
 ```bash
 # === Database ===
-DATABASE_URL="postgresql://postgres:password@localhost:5432/cookie?schema=public"
-DIRECT_URL="postgresql://postgres:password@localhost:5432/cookie?schema=public"
+# 注意：本地 docker postgres 綁到 host port 5433，避免和系統 / Homebrew postgres 衝突
+DATABASE_URL="postgresql://postgres:password@localhost:5433/cookie?schema=public"
+DIRECT_URL="postgresql://postgres:password@localhost:5433/cookie?schema=public"
 
 # === Vector DB (Qdrant) ===
 QDRANT_URL="http://localhost:6333"
@@ -464,10 +505,10 @@ volumes:
 |------|------|----------|
 | 1 | 骨架 + Cookie Shell prototype | `app/page.tsx`, `components/cookie-shell/*` |
 | 2 | LINE parser + onboarding 流程 | `server/line-parser/*`, `app/onboarding/*` |
-| 3 | Persona 生成 + Postgres schema | `server/persona/*`, `prisma/schema.prisma` |
-| 4 | Qdrant 整合 + chat API | `lib/qdrant.ts`, `app/api/chat/route.ts` |
-| 5 | Chat UI + memory layer | `components/chat/*`, `server/memory/*` |
-| 6 | Polish、glitch 特效、persona 剖面頁 | `app/persona/*`, `components/shared/*` |
+| 3 | Persona 生成 pipeline（annotate → mini → final） | `server/persona/*`, `prisma/schema.prisma` |
+| 4 | Qdrant chunk embedding + streaming chat API | `server/memory/embed-chunks.ts`, `app/api/chat/route.ts` |
+| 5 | Memory transparency + chat UX polish | `app/memory/page.tsx`, `app/api/chat/history`, `components/chat/*` |
+| 6 | Persona overrides + 版本切換 + Cookie Shell a11y | `app/persona/page.tsx`, `server/persona/overrides.ts`, `components/cookie-shell/hooks/useReducedMotion.ts` |
 
 ---
 

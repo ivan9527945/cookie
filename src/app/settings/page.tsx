@@ -1,15 +1,27 @@
 'use client';
 
 import { useState } from 'react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 export default function SettingsPage() {
+  const [open, setOpen] = useState(false);
   const [purging, setPurging] = useState(false);
 
-  async function purgeAll() {
-    if (!confirm('確定要清空全部資料？此動作無法復原。')) return;
+  async function confirmPurge() {
     setPurging(true);
-    await fetch('/api/memory', { method: 'DELETE' });
-    setPurging(false);
+    try {
+      await fetch('/api/memory', { method: 'DELETE' });
+    } finally {
+      setPurging(false);
+      setOpen(false);
+    }
   }
 
   return (
@@ -26,13 +38,43 @@ export default function SettingsPage() {
           危險區域
         </h2>
         <button
-          onClick={purgeAll}
+          onClick={() => setOpen(true)}
           disabled={purging}
           className="rounded-md border border-red-500 px-4 py-2 text-sm text-red-600 transition hover:bg-red-50 disabled:opacity-40"
         >
           {purging ? '清除中…' : '清空全部資料'}
         </button>
       </section>
+
+      <Dialog open={open} onOpenChange={(o) => !purging && setOpen(o)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>清空全部資料</DialogTitle>
+            <DialogDescription>
+              這會刪除你上傳的 LINE 對話、所有 chunks、所有 persona 版本、所有 episodic
+              memory 與 Qdrant 向量。此動作無法復原。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              disabled={purging}
+              className="rounded-md border border-neutral-300 px-4 py-1.5 text-xs text-neutral-700 hover:border-neutral-900 disabled:opacity-40"
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              onClick={confirmPurge}
+              disabled={purging}
+              className="rounded-md border border-red-500 bg-red-50 px-4 py-1.5 text-xs text-red-700 hover:bg-red-100 disabled:opacity-40"
+            >
+              {purging ? '清除中…' : '確認清空'}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }

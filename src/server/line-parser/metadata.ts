@@ -25,7 +25,7 @@ const DATE_LINE = /^(\d{4})[/-](\d{1,2})[/-](\d{1,2})/;
 const MSG_LINE = /^(\d{1,2}):(\d{2})\s+(.+?)\s+(.+)$/;
 
 export function extractFileMetadata(raw: string): FileMetadata {
-  const cleaned = raw.replace(/^﻿/, '');
+  const cleaned = raw.replace(/^\uFEFF/, '');
   const lines = cleaned.split(/\r?\n/);
 
   const chatRoom = lines.length > 0 ? lines[0].match(TITLE_LINE)?.[1]?.trim() ?? null : null;

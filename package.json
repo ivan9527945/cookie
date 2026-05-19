@@ -15,6 +15,7 @@
     "db:seed": "tsx prisma/seed.ts",
     "qdrant:init": "tsx scripts/init-qdrant.ts",
     "qdrant:reset": "tsx scripts/reset-vector-db.ts",
+    "test:parse": "tsx scripts/test-parse.ts",
     "prepare": "husky"
   },
   "dependencies": {

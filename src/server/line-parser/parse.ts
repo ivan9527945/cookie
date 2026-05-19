@@ -4,7 +4,7 @@ const DATE_LINE = /^(\d{4})[/-](\d{1,2})[/-](\d{1,2}).*$/;
 const MSG_LINE = /^(\d{1,2}):(\d{2})\s+(.+?)\s+(.+)$/;
 
 export function parseLineTxt(raw: string, opts: ParseOptions): LineMessage[] {
-  const cleaned = raw.replace(/^﻿/, '');
+  const cleaned = raw.replace(/^\uFEFF/, '');
   const lines = cleaned.split(/\r?\n/);
 
   const messages: LineMessage[] = [];
