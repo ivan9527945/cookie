@@ -5,9 +5,12 @@ export interface ChatTurn {
   content: string;
 }
 
+export type ChatMode = 'mirror' | 'simulation';
+
 export interface ChatRequestBody {
   sessionId?: string;
   message: string;
+  mode?: ChatMode;
 }
 
 export interface RetrievedCount {

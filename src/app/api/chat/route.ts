@@ -72,6 +72,7 @@ export async function POST(req: NextRequest) {
       yourName: user.name,
       history,
       message: body.message,
+      mode: body.mode ?? 'mirror',
     });
   } catch (err) {
     return NextResponse.json(
@@ -98,6 +99,7 @@ export async function POST(req: NextRequest) {
             system: turn.request.system,
             messages: turn.request.messages,
             max_tokens: turn.request.max_tokens,
+            metadata: turn.request.metadata,
           },
           { signal: req.signal }
         );

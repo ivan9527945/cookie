@@ -65,6 +65,7 @@ export async function annotateAllPending(
           );
 
           const annotation = await annotateChunk(
+            userId,
             {
               id: chunk.id,
               chatRoom: '',

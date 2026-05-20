@@ -11,6 +11,8 @@ export interface PersonaStateResponse {
   version: number;
   versionId: string;
   generatedAt: string;
+  messageCount: number;
+  dayCount: number;
 }
 
 export interface PersonaVersion {
@@ -20,6 +22,11 @@ export interface PersonaVersion {
   basedOnMessages: number;
   isActive: boolean;
   generationModel: string | null;
+  sliceFilter: {
+    from: string | null;
+    to: string | null;
+    chatRoomIds: string[] | null;
+  } | null;
 }
 
 export interface UsePersonaResult {

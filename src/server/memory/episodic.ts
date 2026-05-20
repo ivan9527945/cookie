@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import { anthropic, MODELS } from '@/lib/anthropic';
+import { anthropic, MODELS, anthropicUserMeta } from '@/lib/anthropic';
 import { qdrant, COLLECTIONS } from '@/lib/qdrant';
 import { embed } from '@/lib/embedding';
 import { db } from '@/lib/db';
@@ -44,6 +44,7 @@ export async function extractEpisodes(
     max_tokens: 800,
     system: EXTRACT_PROMPT,
     messages: [{ role: 'user', content: dialogue }],
+    metadata: anthropicUserMeta(userId),
   });
 
   const text = res.content[0].type === 'text' ? res.content[0].text : '[]';

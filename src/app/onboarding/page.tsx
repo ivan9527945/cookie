@@ -117,7 +117,7 @@ export default function OnboardingPage() {
           <h1 className="text-2xl tracking-tight">先把你的對話交給它</h1>
           <p className="text-sm text-neutral-600">
             上傳 LINE 匯出的 <code className="font-mono">.txt</code>{' '}
-            檔。原始檔案會在處理完成後 24 小時內刪除，只保留結構化資料。
+            檔。原始檔案不會被儲存，解析完即丟棄，只保留結構化訊息。
           </p>
         </header>
 

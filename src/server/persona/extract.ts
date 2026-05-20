@@ -1,4 +1,4 @@
-import { anthropic, MODELS } from '@/lib/anthropic';
+import { anthropic, MODELS, anthropicUserMeta } from '@/lib/anthropic';
 import {
   PersonaProfileSchema,
   type MiniPersona,
@@ -57,6 +57,7 @@ export interface ExtractOptions {
 }
 
 export async function extractPersona(
+  userId: string,
   yourName: string,
   annotatedChunks: AnnotatedChunk[],
   options: ExtractOptions = {}
@@ -97,6 +98,7 @@ export async function extractPersona(
             ),
           },
         ],
+        metadata: anthropicUserMeta(userId),
       });
       const text = res.content[0].type === 'text' ? res.content[0].text : '';
       const parsed = JSON.parse(stripFences(text)) as MiniPersona;
@@ -122,6 +124,7 @@ export async function extractPersona(
         content: finalPersonaUserPrompt(yourName, miniPersonas),
       },
     ],
+    metadata: anthropicUserMeta(userId),
   });
   const finalText =
     final.content[0].type === 'text' ? final.content[0].text : '';

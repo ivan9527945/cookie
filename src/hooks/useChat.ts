@@ -5,6 +5,7 @@ import { useCookieState } from '@/components/cookie-shell/hooks/useCookieState';
 import type {
   ChatHistoryMessage,
   ChatHistoryResponse,
+  ChatMode,
   RetrievedCount,
 } from '@/types/chat';
 
@@ -15,7 +16,7 @@ export interface UseChatReturn {
   isStreaming: boolean;
   error: string | null;
   sessionId: string | null;
-  send: (text: string) => Promise<void>;
+  send: (text: string, mode?: ChatMode) => Promise<void>;
   cancel: () => void;
   newSession: () => Promise<void>;
 }
@@ -50,7 +51,7 @@ export function useChat(): UseChatReturn {
   }, [loadHistory]);
 
   const send = useCallback(
-    async (text: string) => {
+    async (text: string, chatMode: ChatMode = 'mirror') => {
       const trimmed = text.trim();
       if (!trimmed || isStreaming) return;
 
@@ -72,7 +73,7 @@ export function useChat(): UseChatReturn {
         const res = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: trimmed }),
+          body: JSON.stringify({ message: trimmed, mode: chatMode }),
           signal: controller.signal,
         });
 

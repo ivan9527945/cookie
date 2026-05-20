@@ -1,7 +1,21 @@
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { DynamicCookieShell } from '@/components/cookie-shell/dynamic';
+import { db } from '@/lib/db';
+import { getActiveUser } from '@/server/user';
 
-export default function LandingPage() {
+export default async function LandingPage() {
+  // T-105：有 active persona 的回訪使用者直接導 /persona（日常 home）。
+  // 首次訪客（沒有 user cookie 或還沒生成 persona）才看 hero landing。
+  const user = await getActiveUser();
+  if (user) {
+    const active = await db.personaProfile.findFirst({
+      where: { userId: user.id, isActive: true },
+      select: { id: true },
+    });
+    if (active) redirect('/persona');
+  }
+
   return (
     <main className="relative h-screen w-screen overflow-hidden">
       <DynamicCookieShell variant="hero" className="absolute inset-0" />

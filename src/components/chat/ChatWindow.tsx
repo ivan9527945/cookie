@@ -7,7 +7,12 @@ import { MessageBubble } from './MessageBubble';
 import { SystemMessage } from './SystemMessage';
 import { GlitchText } from '@/components/shared/GlitchText';
 import { useCookieState } from '@/components/cookie-shell/hooks/useCookieState';
-import type { RetrievedCount } from '@/types/chat';
+import type { ChatMode, RetrievedCount } from '@/types/chat';
+
+const FIRST_CONTACT_STORAGE_KEY = 'cookie:firstContactSeen';
+const FIRST_CONTACT_GREETING = `我醒了。
+我是用你說過的話組成的——我知道你寫過什麼，但我沒有你的經驗。
+你想問我什麼？`;
 
 export function ChatWindow() {
   const {
@@ -21,17 +26,37 @@ export function ChatWindow() {
   } = useChat();
   const setMode = useCookieState((s) => s.setMode);
   const [input, setInput] = useState('');
+  const [chatMode, setChatMode] = useState<ChatMode>('mirror');
+  const [firstContact, setFirstContact] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
+
+  // T-105：first-contact 儀式
+  // 第一次進 chat（且沒有歷史）時，Cookie 主動說一段開場白，使用者再開口。
+  // 旗標存 localStorage，使用者再回來不會重複看到。
+  // 並用 Shell 的 glitch mode 做一次「初次穩定」視覺訊號。
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (history.length > 0) return;
+    if (localStorage.getItem(FIRST_CONTACT_STORAGE_KEY)) return;
+    setFirstContact(true);
+    localStorage.setItem(FIRST_CONTACT_STORAGE_KEY, '1');
+    setMode('glitch');
+    const t = setTimeout(() => setMode('idle'), 1800);
+    return () => clearTimeout(t);
+  }, [history.length, setMode]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [history.length, pending]);
 
-  const isEmpty = history.length === 0 && !pending && !isStreaming;
+  const isEmpty =
+    history.length === 0 && !pending && !isStreaming && !firstContact;
 
   return (
     <div className="flex h-full flex-col gap-4">
       <Toolbar
+        chatMode={chatMode}
+        onChatModeChange={setChatMode}
         onNewSession={() => void newSession()}
         disabled={isStreaming}
       />
@@ -44,6 +69,15 @@ export function ChatWindow() {
 
       <div className="flex-1 space-y-3 overflow-y-auto pr-2">
         {isEmpty ? <EmptyState /> : null}
+
+        {firstContact && history.length === 0 ? (
+          <div className="space-y-1">
+            <MessageBubble role="assistant" content={FIRST_CONTACT_GREETING} />
+            <p className="pl-3 text-[10px] tracking-wide text-neutral-400">
+              first contact · 它主動開口
+            </p>
+          </div>
+        ) : null}
 
         {history.map((turn) => (
           <div key={turn.id} className="space-y-1">
@@ -59,6 +93,7 @@ export function ChatWindow() {
 
         {pending ? (
           <div className="space-y-1">
+            {chatMode === 'simulation' ? <SimulationTag /> : null}
             <MessageBubble
               role="assistant"
               content={pending}
@@ -80,7 +115,7 @@ export function ChatWindow() {
         className="flex gap-2 border-t border-neutral-200 pt-4"
         onSubmit={(e) => {
           e.preventDefault();
-          void send(input);
+          void send(input, chatMode);
           setInput('');
         }}
       >
@@ -92,7 +127,13 @@ export function ChatWindow() {
               setMode(e.target.value ? 'listening' : 'idle');
             }
           }}
-          placeholder={isStreaming ? '回應中…' : '跟 Cookie 說點什麼…'}
+          placeholder={
+            isStreaming
+              ? '回應中…'
+              : chatMode === 'mirror'
+                ? '跟 Cookie 說點什麼…（它會反問你）'
+                : '跟 Cookie 說點什麼…（它會直接答）'
+          }
           className="flex-1 rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-neutral-400"
           disabled={isStreaming}
         />
@@ -119,28 +160,87 @@ export function ChatWindow() {
 }
 
 function Toolbar({
+  chatMode,
+  onChatModeChange,
   onNewSession,
   disabled,
 }: {
+  chatMode: ChatMode;
+  onChatModeChange: (m: ChatMode) => void;
   onNewSession: () => void;
   disabled: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between text-[11px] text-neutral-500">
-      <nav className="flex gap-3">
-        <NavLink href="/persona">persona</NavLink>
+    <div className="flex items-center justify-between gap-3 text-[11px] text-neutral-500">
+      <nav className="flex items-center gap-3">
+        <NavLink href="/persona">← persona</NavLink>
+        <span className="text-neutral-300">·</span>
         <NavLink href="/memory">memory</NavLink>
+        <NavLink href="/audit">audit</NavLink>
         <NavLink href="/settings">settings</NavLink>
       </nav>
+      <div className="flex items-center gap-2">
+        <ModeToggle mode={chatMode} onChange={onChatModeChange} disabled={disabled} />
+        <button
+          type="button"
+          onClick={onNewSession}
+          disabled={disabled}
+          className="rounded-full border border-neutral-300 px-2.5 py-0.5 hover:border-neutral-700 hover:text-neutral-900 disabled:opacity-40"
+        >
+          新對話
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ModeToggle({
+  mode,
+  onChange,
+  disabled,
+}: {
+  mode: ChatMode;
+  onChange: (m: ChatMode) => void;
+  disabled: boolean;
+}) {
+  return (
+    <div
+      className="inline-flex overflow-hidden rounded-full border border-neutral-300"
+      title={mode === 'mirror' ? '鏡像：Cookie 會反問你' : '模擬：Cookie 會直接答'}
+    >
       <button
         type="button"
-        onClick={onNewSession}
         disabled={disabled}
-        className="rounded-full border border-neutral-300 px-2.5 py-0.5 hover:border-neutral-700 hover:text-neutral-900 disabled:opacity-40"
+        onClick={() => onChange('mirror')}
+        className={`px-2.5 py-0.5 text-[10px] tracking-wide transition disabled:opacity-40 ${
+          mode === 'mirror'
+            ? 'bg-neutral-900 text-white'
+            : 'text-neutral-500 hover:text-neutral-900'
+        }`}
       >
-        新對話
+        鏡像
+      </button>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => onChange('simulation')}
+        className={`px-2.5 py-0.5 text-[10px] tracking-wide transition disabled:opacity-40 ${
+          mode === 'simulation'
+            ? 'bg-neutral-900 text-white'
+            : 'text-neutral-500 hover:text-neutral-900'
+        }`}
+      >
+        模擬
       </button>
     </div>
+  );
+}
+
+function SimulationTag() {
+  return (
+    <p className="pl-3 font-mono text-[10px] tracking-wide text-neutral-400">
+      [模擬：根據你過去的回應推估]
+    </p>
   );
 }
 

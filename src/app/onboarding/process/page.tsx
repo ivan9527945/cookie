@@ -93,7 +93,8 @@ export default function ProcessPage() {
         if (pollRef.current) clearInterval(pollRef.current);
         if (s.state === 'done') {
           // 小延遲讓使用者看到「完成」狀態再跳轉
-          setTimeout(() => router.push('/persona'), 1500);
+          // T-105：awakening 結束的高潮時刻直接導到 chat（鏡子的我），不是 persona
+          setTimeout(() => router.push('/chat'), 1500);
         } else if (s.code === BILLING_INSUFFICIENT_CODE) {
           setShowBillingDialog(true);
           setMode('idle');

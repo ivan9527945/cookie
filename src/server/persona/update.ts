@@ -50,6 +50,12 @@ export async function getActivePersonaState(
   };
 }
 
+export interface VersionSliceFilter {
+  from: string | null;
+  to: string | null;
+  chatRoomIds: string[] | null;
+}
+
 export interface VersionListItem {
   id: string;
   version: number;
@@ -57,6 +63,8 @@ export interface VersionListItem {
   basedOnMessages: number;
   isActive: boolean;
   generationModel: string | null;
+  /** 若此版本是時間切片（T-110），帶出 filter 條件給 UI 標記 */
+  sliceFilter: VersionSliceFilter | null;
 }
 
 /** 列出該 user 的所有 persona 版本，版本號降冪。 */
@@ -71,9 +79,20 @@ export async function listVersions(userId: string): Promise<VersionListItem[]> {
       basedOnMessages: true,
       isActive: true,
       generationModel: true,
+      profile: true,
     },
   });
-  return rows;
+  return rows.map(({ profile, ...rest }) => {
+    const sliceFilter =
+      profile &&
+      typeof profile === 'object' &&
+      !Array.isArray(profile) &&
+      'sliceFilter' in profile &&
+      profile.sliceFilter
+        ? (profile.sliceFilter as unknown as VersionSliceFilter)
+        : null;
+    return { ...rest, sliceFilter };
+  });
 }
 
 /** 把某個 version 標為 active，其他 deactivate（單一 transaction）。 */

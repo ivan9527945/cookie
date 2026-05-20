@@ -1,4 +1,4 @@
-import { anthropic, MODELS } from '@/lib/anthropic';
+import { anthropic, MODELS, anthropicUserMeta } from '@/lib/anthropic';
 import {
   BillingError,
   isAnthropicBillingMessage,
@@ -35,6 +35,7 @@ function stripFences(text: string): string {
 }
 
 async function callAnnotate(
+  userId: string,
   dialogue: string,
   yourName: string,
   start: Date,
@@ -54,6 +55,7 @@ ${dialogue}
 請輸出 JSON。`,
       },
     ],
+    metadata: anthropicUserMeta(userId),
   });
 
   const raw = res.content[0].type === 'text' ? res.content[0].text : '';
@@ -67,6 +69,7 @@ ${dialogue}
 }
 
 export async function annotateChunk(
+  userId: string,
   chunk: ConversationChunk,
   yourName: string,
   options: { maxRetries?: number } = {}
@@ -85,6 +88,7 @@ export async function annotateChunk(
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
       return await callAnnotate(
+        userId,
         dialogue,
         yourName,
         chunk.startTime,

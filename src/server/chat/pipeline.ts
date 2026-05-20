@@ -1,14 +1,15 @@
-import { anthropic, MODELS } from '@/lib/anthropic';
+import { anthropic, MODELS, anthropicUserMeta } from '@/lib/anthropic';
 import { buildSystemPrompt } from './system-prompt';
 import { retrieveMemories } from '@/server/memory/retrieve';
-import { getActivePersona } from '@/server/persona/update';
-import type { ChatTurn } from '@/types/chat';
+import { getActivePersonaState } from '@/server/persona/update';
+import type { ChatMode, ChatTurn } from '@/types/chat';
 
 export interface ChatPipelineInput {
   userId: string;
   yourName: string;
   history: ChatTurn[];
   message: string;
+  mode?: ChatMode;
 }
 
 export interface ChatPipelineContext {
@@ -19,8 +20,8 @@ export interface ChatPipelineContext {
 
 /** 組合 system prompt + retrieved memory，回傳可直接餵給 anthropic.messages.stream 的 payload */
 export async function prepareChatTurn(input: ChatPipelineInput) {
-  const persona = await getActivePersona(input.userId);
-  if (!persona) {
+  const state = await getActivePersonaState(input.userId);
+  if (!state) {
     throw new Error('No active persona profile for user');
   }
 
@@ -34,7 +35,13 @@ export async function prepareChatTurn(input: ChatPipelineInput) {
           ...memories.episodes.map((e) => `· ${e.summary}`),
         ].join('\n')}`;
 
-  const systemPrompt = buildSystemPrompt(persona, input.yourName) + memoryContext;
+  const systemPrompt =
+    buildSystemPrompt(
+      state.merged,
+      input.yourName,
+      input.mode ?? 'mirror',
+      state.overrides
+    ) + memoryContext;
 
   return {
     systemPrompt,
@@ -51,6 +58,7 @@ export async function prepareChatTurn(input: ChatPipelineInput) {
         { role: 'user' as const, content: input.message },
       ],
       max_tokens: 1024,
+      metadata: anthropicUserMeta(input.userId),
     },
   };
 }

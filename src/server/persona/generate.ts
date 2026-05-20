@@ -8,6 +8,22 @@ import { setStatus } from './status';
 import { embedAllPending } from '@/server/memory/embed-chunks';
 import type { AnnotatedChunk, ChatType, EmotionalTone } from '@/types/line';
 
+export interface PersonaSliceFilter {
+  /** 只取此時點之後的訊息 */
+  from?: Date;
+  /** 只取此時點之前的訊息 */
+  to?: Date;
+  /** 只取指定 UploadedChat（單一聊天室或多選） */
+  chatRoomIds?: string[];
+}
+
+export interface PersonaGenerateOptions {
+  /** 切片條件：只用符合的 chunk 跑 persona */
+  filter?: PersonaSliceFilter;
+  /** 若 true：產出的 version 不會自動啟用、舊版也不會被 deactivate（純切片觀察） */
+  asSlice?: boolean;
+}
+
 export interface PersonaGenerateResult {
   version: number;
   basedOnChunks: number;
@@ -20,20 +36,23 @@ export interface PersonaGenerateResult {
 /**
  * 完整 persona pipeline：
  *   1. annotate 所有 pending chunks（Haiku × N，併發 8）
- *   2. 從 DB 撈出已標註且 importance >= 4 的 chunks
+ *   2. 從 DB 撈出已標註且 importance >= 4 的 chunks（可加 filter）
  *   3. extractPersona（map-reduce on Opus）
- *   4. 寫 PersonaProfile（version = max+1, isActive=true，舊版本 isActive=false）
+ *   4. 寫 PersonaProfile
+ *      - 預設：version = max+1, isActive=true, 舊 active 變 inactive
+ *      - asSlice=true：version = max+1, isActive=false, 舊版本不動（純觀察）
  *   5. 寫 audit log
  */
 export async function runPersonaPipeline(
   userId: string,
-  yourName: string
+  yourName: string,
+  options: PersonaGenerateOptions = {}
 ): Promise<PersonaGenerateResult> {
   const startedAt = new Date().toISOString();
   setStatus(userId, { state: 'annotating', startedAt });
 
   try {
-    return await runPipelineInner(userId, yourName);
+    return await runPipelineInner(userId, yourName, options);
   } catch (err) {
     // annotate-batch 已把餘額不足包成 BillingError；extract 階段如果也撞到，
     // Anthropic SDK 會丟原始錯誤訊息 — 在這裡統一比對訊息字串。
@@ -52,15 +71,32 @@ export async function runPersonaPipeline(
 
 async function runPipelineInner(
   userId: string,
-  yourName: string
+  yourName: string,
+  options: PersonaGenerateOptions
 ): Promise<PersonaGenerateResult> {
+  const { filter, asSlice = false } = options;
+
+  // 全資料 annotate（切片仍然 annotate 全部，filter 只影響哪些進 extract）
   const annotateResult = await annotateAllPending(userId, yourName);
 
   const usable = await db.conversationChunk.findMany({
     where: {
-      uploadedChat: { userId },
+      uploadedChat: {
+        userId,
+        ...(filter?.chatRoomIds && filter.chatRoomIds.length > 0
+          ? { id: { in: filter.chatRoomIds } }
+          : {}),
+      },
       annotatedAt: { not: null },
       importance: { gte: 4 },
+      ...(filter?.from || filter?.to
+        ? {
+            startTime: {
+              ...(filter.from ? { gte: filter.from } : {}),
+              ...(filter.to ? { lte: filter.to } : {}),
+            },
+          }
+        : {}),
     },
     select: {
       id: true,
@@ -77,9 +113,10 @@ async function runPipelineInner(
   });
 
   if (usable.length === 0) {
-    const message =
-      '沒有符合條件的對話段落（importance >= 4）。' +
-      '可能是 chunk 太少或都被判為閒聊。';
+    const message = asSlice
+      ? '這個切片範圍沒有任何符合的對話段落，換個日期或聊天室試試。'
+      : '沒有符合條件的對話段落（importance >= 4）。' +
+        '可能是 chunk 太少或都被判為閒聊。';
     setStatus(userId, { state: 'error', message });
     throw new Error(message);
   }
@@ -113,7 +150,7 @@ async function runPipelineInner(
     importance: c.importance ?? 0,
   }));
 
-  const profile = await extractPersona(yourName, input, {
+  const profile = await extractPersona(userId, yourName, input, {
     onProgress: (e) => {
       setStatus(userId, {
         state: 'extracting',
@@ -127,15 +164,36 @@ async function runPipelineInner(
     },
   });
 
+  // 取最高版本號（不只 active，避免切片時碰撞）
+  const highest = await db.personaProfile.findFirst({
+    where: { userId },
+    orderBy: { version: 'desc' },
+    select: { id: true, version: true },
+  });
   const previous = await db.personaProfile.findFirst({
     where: { userId, isActive: true },
     select: { id: true, version: true },
   });
-  const nextVersion = (previous?.version ?? 0) + 1;
-  const versionedProfile = { ...profile, version: nextVersion };
+  const nextVersion = (highest?.version ?? 0) + 1;
+
+  // 切片：把 filter 寫進 profile JSON 留痕，UI 可以辨識這是哪段時間的我
+  const versionedProfile = {
+    ...profile,
+    version: nextVersion,
+    ...(asSlice && filter
+      ? {
+          sliceFilter: {
+            from: filter.from?.toISOString() ?? null,
+            to: filter.to?.toISOString() ?? null,
+            chatRoomIds: filter.chatRoomIds ?? null,
+          },
+        }
+      : {}),
+  };
 
   const updates: Prisma.PrismaPromise<unknown>[] = [];
-  if (previous) {
+  // 切片不 deactivate active；主版本才會
+  if (!asSlice && previous) {
     updates.push(
       db.personaProfile.update({
         where: { id: previous.id },
@@ -149,7 +207,7 @@ async function runPipelineInner(
         userId,
         version: nextVersion,
         parentVersionId: previous?.id ?? null,
-        isActive: true,
+        isActive: !asSlice,
         profile: versionedProfile as unknown as Prisma.InputJsonValue,
         basedOnMessages: input.length,
         generationModel: 'claude-opus-4-7',
@@ -168,6 +226,16 @@ async function runPipelineInner(
     failedAnnotations: annotateResult.failed,
     embedded: embedResult.embedded,
     embeddingFailed: embedResult.failed,
+    ...(asSlice
+      ? {
+          slice: true,
+          filter: {
+            from: filter?.from?.toISOString() ?? null,
+            to: filter?.to?.toISOString() ?? null,
+            chatRoomIds: filter?.chatRoomIds ?? null,
+          },
+        }
+      : {}),
   });
 
   setStatus(userId, {
