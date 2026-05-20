@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePersona, type PersonaVersion } from '@/hooks/usePersona';
 import { useFootprint } from '@/hooks/useFootprint';
@@ -8,6 +8,8 @@ import { useAvoidance } from '@/hooks/useAvoidance';
 import { GlitchText } from '@/components/shared/GlitchText';
 import { SliceForm } from '@/components/persona/SliceForm';
 import { EvidenceDrawer } from '@/components/persona/EvidenceDrawer';
+import { Button } from '@/components/ui/button';
+import { useAsyncAction } from '@/hooks/useAsyncAction';
 import type { PersonaProfile } from '@/types/persona';
 import {
   emptyOverrides,
@@ -31,8 +33,12 @@ export default function PersonaPage() {
   const { data: avoidance } = useAvoidance();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<PersonaOverrides>(emptyOverrides());
-  const [saving, setSaving] = useState(false);
   const [evidenceQuery, setEvidenceQuery] = useState<string | null>(null);
+  const { pending: saving, run: handleSave } = useAsyncAction(async () => {
+    await saveOverrides(draft);
+    setEditing(false);
+  });
+  const { pending: activating, run: handleActivate } = useAsyncAction(activate);
 
   useEffect(() => {
     if (state) setDraft(state.overrides);
@@ -60,16 +66,6 @@ export default function PersonaPage() {
   // 編輯模式下顯示 raw，由 EditableArray 在 UI 上呈現「rejected」與「added」
   const view: PersonaProfile = editing ? state.raw : state.profile;
 
-  async function handleSave() {
-    setSaving(true);
-    try {
-      await saveOverrides(draft);
-      setEditing(false);
-    } finally {
-      setSaving(false);
-    }
-  }
-
   function handleCancel() {
     setDraft(state?.overrides ?? emptyOverrides());
     setEditing(false);
@@ -81,8 +77,9 @@ export default function PersonaPage() {
         state={state}
         versions={versions}
         editing={editing}
+        activating={activating}
         onEditToggle={() => setEditing((v) => !v)}
-        onActivate={(id) => void activate(id)}
+        onActivate={(id) => void handleActivate(id)}
       />
 
       {!editing ? <ChatCTA /> : null}
@@ -266,7 +263,9 @@ export default function PersonaPage() {
         <EditFooter
           dirty={!shallowEqual(draft, state.overrides)}
           saving={saving}
-          onSave={() => void handleSave()}
+          onSave={() => {
+            void handleSave();
+          }}
           onCancel={handleCancel}
         />
       ) : (
@@ -299,6 +298,7 @@ function Header({
   state,
   versions,
   editing,
+  activating,
   onEditToggle,
   onActivate,
 }: {
@@ -310,6 +310,7 @@ function Header({
   };
   versions: PersonaVersion[];
   editing: boolean;
+  activating: boolean;
   onEditToggle: () => void;
   onActivate: (id: string) => void;
 }) {
@@ -334,8 +335,8 @@ function Header({
             <select
               value={versions.find((v) => v.isActive)?.id ?? ''}
               onChange={(e) => onActivate(e.target.value)}
-              className="rounded border border-neutral-300 bg-white px-2 py-1 text-xs"
-              disabled={editing}
+              className="rounded border border-neutral-300 bg-white px-2 py-1 text-xs disabled:opacity-50"
+              disabled={editing || activating}
             >
               {versions.map((v) => (
                 <option key={v.id} value={v.id}>
@@ -344,17 +345,17 @@ function Header({
               ))}
             </select>
           ) : null}
-          <button
-            type="button"
+          <Button
             onClick={onEditToggle}
-            className={`rounded-full border px-3 py-1 text-xs ${
+            disabled={activating}
+            className={`rounded-full border px-3 py-1 text-xs disabled:opacity-50 ${
               editing
                 ? 'border-neutral-900 bg-neutral-900 text-white'
                 : 'border-neutral-300 text-neutral-700 hover:border-neutral-900'
             }`}
           >
             {editing ? '結束編輯' : '編輯'}
-          </button>
+          </Button>
         </div>
       </div>
     </header>
@@ -565,22 +566,22 @@ function EditFooter({
         {dirty ? '有未儲存的修正' : '沒有變動'}
       </span>
       <div className="flex gap-2">
-        <button
-          type="button"
+        <Button
           onClick={onCancel}
           disabled={saving}
-          className="rounded-full border border-neutral-300 px-3 py-1 hover:border-neutral-900"
+          className="rounded-full border border-neutral-300 px-3 py-1 hover:border-neutral-900 disabled:opacity-50"
         >
           取消
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
           onClick={onSave}
-          disabled={!dirty || saving}
+          loading={saving}
+          loadingText="儲存中…"
+          disabled={!dirty}
           className="rounded-full bg-neutral-900 px-3 py-1 text-white disabled:opacity-40"
         >
-          {saving ? '儲存中…' : '儲存修正'}
-        </button>
+          儲存修正
+        </Button>
       </div>
     </footer>
   );
@@ -698,8 +699,11 @@ function ContradictionsBlock({
   onAskEvidence: (q: string) => void;
 }) {
   const [busyStatement, setBusyStatement] = useState<string | null>(null);
+  const inflightRef = useRef(false);
 
   async function setTag(statement: string, tag: ContradictionTag | null) {
+    if (inflightRef.current) return;
+    inflightRef.current = true;
     setBusyStatement(statement);
     try {
       const nextTags = { ...overrides.contradictionTags };
@@ -707,6 +711,7 @@ function ContradictionsBlock({
       else nextTags[statement] = tag;
       await onSave({ ...overrides, contradictionTags: nextTags });
     } finally {
+      inflightRef.current = false;
       setBusyStatement(null);
     }
   }
@@ -746,10 +751,10 @@ function ContradictionsBlock({
                 {TAG_OPTIONS.map((opt) => {
                   const active = tag === opt.value;
                   return (
-                    <button
+                    <Button
                       key={opt.value}
-                      type="button"
-                      disabled={busy}
+                      loading={busy && active}
+                      disabled={busyStatement !== null && busyStatement !== statement}
                       onClick={() =>
                         void setTag(statement, active ? null : opt.value)
                       }
@@ -762,7 +767,7 @@ function ContradictionsBlock({
                       }`}
                     >
                       {opt.label}
-                    </button>
+                    </Button>
                   );
                 })}
                 {tag === 'growth-target' ? (

@@ -16,6 +16,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { useAsyncAction } from '@/hooks/useAsyncAction';
 import type { IngestResponse } from '@/types/ingest';
 import type {
   GenerateStatus,
@@ -105,7 +107,7 @@ export default function ProcessPage() {
     }, 1500);
   }
 
-  async function startGenerate() {
+  const { pending: starting, run: startGenerate } = useAsyncAction(async () => {
     setError(null);
     setMode('thinking');
     const res = await fetch('/api/persona/generate', { method: 'POST' });
@@ -116,7 +118,7 @@ export default function ProcessPage() {
       return;
     }
     startPolling();
-  }
+  });
 
   const running =
     status?.state === 'annotating' || status?.state === 'extracting';
@@ -211,13 +213,14 @@ export default function ProcessPage() {
             ) : null}
 
             <div className="flex gap-3">
-              <button
-                onClick={startGenerate}
-                disabled={running}
+              <Button
+                onClick={() => void startGenerate()}
+                loading={starting || running}
+                loadingText="進行中…"
                 className="rounded-full border border-neutral-900 bg-neutral-900 px-4 py-1.5 text-xs text-white disabled:opacity-40"
               >
-                {running ? '進行中…' : '開始生成'}
-              </button>
+                開始生成
+              </Button>
               <Link
                 href="/persona"
                 className="rounded-full border border-neutral-300 px-4 py-1.5 text-xs text-neutral-600 hover:border-neutral-900 hover:text-neutral-900"

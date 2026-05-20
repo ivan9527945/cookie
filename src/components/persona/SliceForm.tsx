@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { Button } from '@/components/ui/button';
 
 interface ChatRoom {
   id: string;
@@ -30,6 +31,7 @@ export function SliceForm({ onCreated }: SliceFormProps) {
   const [to, setTo] = useState('');
   const [selectedChats, setSelectedChats] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
   const [status, setStatus] = useState<GenerateStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -61,6 +63,8 @@ export function SliceForm({ onCreated }: SliceFormProps) {
   }
 
   async function submit() {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setError(null);
     setSubmitting(true);
     setStatus({ state: 'annotating' });
@@ -93,6 +97,7 @@ export function SliceForm({ onCreated }: SliceFormProps) {
         setStatus(s);
         if (s.state === 'done' || s.state === 'error') {
           clearInterval(interval);
+          submittingRef.current = false;
           setSubmitting(false);
           if (s.state === 'done') {
             await onCreated();
@@ -107,6 +112,7 @@ export function SliceForm({ onCreated }: SliceFormProps) {
       }, 1500);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+      submittingRef.current = false;
       setSubmitting(false);
       setStatus(null);
     }
@@ -188,14 +194,15 @@ export function SliceForm({ onCreated }: SliceFormProps) {
           <p className="text-[11px] text-neutral-400">
             切片不會取代主版本，可從上方版本選單切過去查看。
           </p>
-          <button
-            type="button"
+          <Button
             onClick={() => void submit()}
+            loading={submitting}
+            loadingText="生成中…"
             disabled={!canSubmit}
             className="rounded-full bg-neutral-900 px-3 py-1 text-xs text-white disabled:opacity-40"
           >
-            {submitting ? '生成中…' : '生成切片'}
-          </button>
+            生成切片
+          </Button>
         </div>
       </div>
     </details>

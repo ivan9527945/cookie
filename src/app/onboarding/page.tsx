@@ -4,6 +4,8 @@ import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { FileDropzone } from '@/components/onboarding/FileDropzone';
 import { DynamicHospitalRoom } from '@/components/onboarding/hospital-room/dynamic';
+import { Button } from '@/components/ui/button';
+import { useAsyncAction } from '@/hooks/useAsyncAction';
 import type {
   FilePreview,
   IngestFileMeta,
@@ -68,7 +70,7 @@ export default function OnboardingPage() {
     }
   }
 
-  async function submitIngest() {
+  const { pending: submitting, run: submitIngest } = useAsyncAction(async () => {
     if (!selfName.trim() || items.length === 0) return;
     setStep('submitting');
     setError(null);
@@ -99,7 +101,7 @@ export default function OnboardingPage() {
       setError(err instanceof Error ? err.message : String(err));
       setStep('preview');
     }
-  }
+  });
 
   if (items.length === 0) {
     return (
@@ -286,32 +288,29 @@ export default function OnboardingPage() {
         </section>
 
         <div className="flex items-center justify-between pb-2">
-          <button
-            type="button"
+          <Button
             onClick={() => {
               setItems([]);
               setSelfName('');
               setStep('upload');
             }}
-            className="text-xs text-neutral-500 transition hover:text-neutral-900"
+            disabled={submitting || step === 'submitting'}
+            className="text-xs text-neutral-500 transition hover:text-neutral-900 disabled:opacity-40"
             style={{
               textShadow: '0 1px 2px rgba(255,255,255,0.5)',
             }}
           >
             重新選擇
-          </button>
-          <button
-            type="button"
-            onClick={submitIngest}
-            disabled={
-              !selfName.trim() ||
-              items.length === 0 ||
-              step === 'submitting'
-            }
+          </Button>
+          <Button
+            onClick={() => void submitIngest()}
+            loading={submitting || step === 'submitting'}
+            loadingText="處理中…"
+            disabled={!selfName.trim() || items.length === 0}
             className="rounded-full border border-neutral-900 bg-neutral-900 px-5 py-2 text-sm text-white shadow-[0_10px_24px_-10px_rgba(0,0,0,0.5)] transition disabled:opacity-40"
           >
-            {step === 'submitting' ? '處理中…' : '開始處理'}
-          </button>
+            開始處理
+          </Button>
         </div>
       </div>
     </div>

@@ -30,6 +30,7 @@ export function useChat(): UseChatReturn {
   const [pendingRetrieved, setPendingRetrieved] =
     useState<RetrievedCount | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
+  const isStreamingRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -53,7 +54,8 @@ export function useChat(): UseChatReturn {
   const send = useCallback(
     async (text: string, chatMode: ChatMode = 'mirror') => {
       const trimmed = text.trim();
-      if (!trimmed || isStreaming) return;
+      if (!trimmed || isStreamingRef.current) return;
+      isStreamingRef.current = true;
 
       setError(null);
       const userMessage: ChatHistoryMessage = {
@@ -112,11 +114,12 @@ export function useChat(): UseChatReturn {
         }
       } finally {
         abortRef.current = null;
+        isStreamingRef.current = false;
         setIsStreaming(false);
         setMode('idle');
       }
     },
-    [isStreaming, loadHistory, pulse, setMode]
+    [loadHistory, pulse, setMode]
   );
 
   const cancel = useCallback(() => {
@@ -124,7 +127,7 @@ export function useChat(): UseChatReturn {
   }, []);
 
   const newSession = useCallback(async () => {
-    if (isStreaming) cancel();
+    if (isStreamingRef.current) cancel();
     try {
       const res = await fetch('/api/chat/session', { method: 'POST' });
       if (!res.ok) throw new Error(`new session failed: ${res.status}`);
@@ -137,7 +140,7 @@ export function useChat(): UseChatReturn {
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
-  }, [cancel, isStreaming]);
+  }, [cancel]);
 
   return {
     history,

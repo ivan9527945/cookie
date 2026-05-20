@@ -7,6 +7,8 @@ import { MessageBubble } from './MessageBubble';
 import { SystemMessage } from './SystemMessage';
 import { GlitchText } from '@/components/shared/GlitchText';
 import { useCookieState } from '@/components/cookie-shell/hooks/useCookieState';
+import { Button } from '@/components/ui/button';
+import { useAsyncAction } from '@/hooks/useAsyncAction';
 import type { ChatMode, RetrievedCount } from '@/types/chat';
 
 const FIRST_CONTACT_STORAGE_KEY = 'cookie:firstContactSeen';
@@ -29,6 +31,8 @@ export function ChatWindow() {
   const [chatMode, setChatMode] = useState<ChatMode>('mirror');
   const [firstContact, setFirstContact] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
+  const { pending: startingNewSession, run: runNewSession } =
+    useAsyncAction(newSession);
 
   // T-105：first-contact 儀式
   // 第一次進 chat（且沒有歷史）時，Cookie 主動說一段開場白，使用者再開口。
@@ -57,8 +61,9 @@ export function ChatWindow() {
       <Toolbar
         chatMode={chatMode}
         onChatModeChange={setChatMode}
-        onNewSession={() => void newSession()}
+        onNewSession={() => void runNewSession()}
         disabled={isStreaming}
+        newSessionLoading={startingNewSession}
       />
 
       <SystemMessage>
@@ -138,21 +143,20 @@ export function ChatWindow() {
           disabled={isStreaming}
         />
         {isStreaming ? (
-          <button
-            type="button"
+          <Button
             onClick={cancel}
             className="rounded-md border border-neutral-300 bg-white px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-50"
           >
             中斷
-          </button>
+          </Button>
         ) : (
-          <button
+          <Button
             type="submit"
             disabled={!input.trim()}
             className="rounded-md bg-neutral-900 px-4 py-2 text-sm text-white disabled:opacity-40"
           >
             送出
-          </button>
+          </Button>
         )}
       </form>
     </div>
@@ -164,11 +168,13 @@ function Toolbar({
   onChatModeChange,
   onNewSession,
   disabled,
+  newSessionLoading,
 }: {
   chatMode: ChatMode;
   onChatModeChange: (m: ChatMode) => void;
   onNewSession: () => void;
   disabled: boolean;
+  newSessionLoading: boolean;
 }) {
   return (
     <div className="flex items-center justify-between gap-3 text-[11px] text-neutral-500">
@@ -181,14 +187,15 @@ function Toolbar({
       </nav>
       <div className="flex items-center gap-2">
         <ModeToggle mode={chatMode} onChange={onChatModeChange} disabled={disabled} />
-        <button
-          type="button"
+        <Button
           onClick={onNewSession}
+          loading={newSessionLoading}
+          loadingText="開新對話…"
           disabled={disabled}
           className="rounded-full border border-neutral-300 px-2.5 py-0.5 hover:border-neutral-700 hover:text-neutral-900 disabled:opacity-40"
         >
           新對話
-        </button>
+        </Button>
       </div>
     </div>
   );

@@ -9,20 +9,18 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { useAsyncAction } from '@/hooks/useAsyncAction';
 
 export default function SettingsPage() {
   const [open, setOpen] = useState(false);
-  const [purging, setPurging] = useState(false);
-
-  async function confirmPurge() {
-    setPurging(true);
+  const { pending: purging, run: confirmPurge } = useAsyncAction(async () => {
     try {
       await fetch('/api/memory', { method: 'DELETE' });
     } finally {
-      setPurging(false);
       setOpen(false);
     }
-  }
+  });
 
   return (
     <main className="mx-auto max-w-2xl space-y-8 px-6 py-12">
@@ -37,13 +35,14 @@ export default function SettingsPage() {
         <h2 className="text-sm font-medium uppercase tracking-wide text-neutral-500">
           危險區域
         </h2>
-        <button
+        <Button
           onClick={() => setOpen(true)}
-          disabled={purging}
+          loading={purging}
+          loadingText="清除中…"
           className="rounded-md border border-red-500 px-4 py-2 text-sm text-red-600 transition hover:bg-red-50 disabled:opacity-40"
         >
-          {purging ? '清除中…' : '清空全部資料'}
-        </button>
+          清空全部資料
+        </Button>
       </section>
 
       <Dialog open={open} onOpenChange={(o) => !purging && setOpen(o)}>
@@ -56,22 +55,21 @@ export default function SettingsPage() {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <button
-              type="button"
+            <Button
               onClick={() => setOpen(false)}
               disabled={purging}
               className="rounded-md border border-neutral-300 px-4 py-1.5 text-xs text-neutral-700 hover:border-neutral-900 disabled:opacity-40"
             >
               取消
-            </button>
-            <button
-              type="button"
-              onClick={confirmPurge}
-              disabled={purging}
+            </Button>
+            <Button
+              onClick={() => void confirmPurge()}
+              loading={purging}
+              loadingText="清除中…"
               className="rounded-md border border-red-500 bg-red-50 px-4 py-1.5 text-xs text-red-700 hover:bg-red-100 disabled:opacity-40"
             >
-              {purging ? '清除中…' : '確認清空'}
-            </button>
+              確認清空
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

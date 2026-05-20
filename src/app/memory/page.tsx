@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { Button } from '@/components/ui/button';
 
 interface EpisodeRow {
   id: string;
@@ -108,14 +109,15 @@ export default function MemoryPage() {
                     {' · '}
                     {new Date(ep.createdAt).toLocaleString()}
                   </span>
-                  <button
-                    type="button"
+                  <Button
                     onClick={() => void deleteOne(ep.id)}
-                    disabled={busy === ep.id}
+                    loading={busy === ep.id}
+                    loadingText="刪除中…"
+                    disabled={busy !== null && busy !== ep.id}
                     className="text-red-600 hover:underline disabled:opacity-40"
                   >
                     刪除
-                  </button>
+                  </Button>
                 </div>
               </li>
             ))}
@@ -128,14 +130,15 @@ export default function MemoryPage() {
             >
               ← 回到對話
             </Link>
-            <button
-              type="button"
+            <Button
               onClick={() => void clearAll()}
-              disabled={busy === 'all'}
+              loading={busy === 'all'}
+              loadingText="清除中…"
+              disabled={busy !== null && busy !== 'all'}
               className="rounded border border-red-300 px-3 py-1 text-red-600 hover:bg-red-50 disabled:opacity-40"
             >
-              {busy === 'all' ? '清除中…' : '清空全部記憶'}
-            </button>
+              清空全部記憶
+            </Button>
           </div>
         </>
       ) : null}
