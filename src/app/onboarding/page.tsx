@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { FileDropzone } from '@/components/onboarding/FileDropzone';
+import { DynamicHospitalRoom } from '@/components/onboarding/hospital-room/dynamic';
 import type {
   FilePreview,
   IngestFileMeta,
@@ -100,6 +101,48 @@ export default function OnboardingPage() {
     }
   }
 
+  if (items.length === 0) {
+    return (
+      <div className="relative h-screen w-full overflow-hidden">
+        {/* 3D 病房場景做為背景 */}
+        <div className="absolute inset-0">
+          <DynamicHospitalRoom />
+        </div>
+
+        {/* 頂部資訊 */}
+        <header className="absolute inset-x-0 top-0 z-10 mx-auto w-full max-w-2xl space-y-2 px-6 pt-10 text-neutral-800 mix-blend-multiply">
+          <p className="text-[11px] uppercase tracking-[0.22em] text-neutral-500">
+            intake · operating theater
+          </p>
+          <h1 className="text-2xl tracking-tight">先把你的對話交給它</h1>
+          <p className="text-sm text-neutral-600">
+            上傳 LINE 匯出的 <code className="font-mono">.txt</code>{' '}
+            檔。原始檔案會在處理完成後 24 小時內刪除，只保留結構化資料。
+          </p>
+        </header>
+
+        {error ? (
+          <div className="absolute inset-x-0 top-44 z-10 mx-auto w-full max-w-2xl px-6">
+            <div className="rounded-md border border-red-300 bg-red-50/90 px-3 py-2 text-sm text-red-700 shadow-sm">
+              {error}
+            </div>
+          </div>
+        ) : null}
+
+        {/* Dropzone — 透明點擊區，蓋住整個病床範圍 */}
+        <div
+          className="absolute left-1/2 top-[56%] z-10 -translate-x-1/2 -translate-y-1/2"
+          style={{
+            width: 'min(820px, 78vw)',
+            height: 'min(360px, 48vh)',
+          }}
+        >
+          <FileDropzone onFiles={handleFiles} />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-6 py-16">
       <header className="space-y-3">
@@ -116,11 +159,7 @@ export default function OnboardingPage() {
         </div>
       ) : null}
 
-      {step === 'upload' ? (
-        <FileDropzone onFiles={handleFiles} />
-      ) : null}
-
-      {step !== 'upload' && items.length > 0 ? (
+      {items.length > 0 ? (
         <>
           <ul className="space-y-3">
             {items.map((it, i) => (

@@ -36,6 +36,10 @@ pnpm-debug.log*
 # vercel
 .vercel
 
+# playwright dev artifacts
+.playwright-mcp/
+onboarding-*.png
+
 # prisma
 prisma/*.db
 prisma/*.db-journal

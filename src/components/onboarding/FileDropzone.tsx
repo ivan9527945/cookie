@@ -25,12 +25,15 @@ export function FileDropzone({ onFiles, accept = '.txt', className }: Props) {
   return (
     <label
       className={cn(
-        'flex h-48 cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed transition',
-        active
-          ? 'border-neutral-900 bg-neutral-50'
-          : 'border-neutral-300 bg-white hover:border-neutral-500',
+        'group relative block h-full w-full cursor-pointer transition-all duration-300',
         className
       )}
+      style={{
+        // drag-over 時冒出一團柔光蓋住床面（hint：這就是 drop 區）
+        background: active
+          ? 'radial-gradient(ellipse 70% 60% at 50% 55%, rgba(255,255,255,0.6) 0%, rgba(255,255,255,0.25) 40%, rgba(255,255,255,0) 75%)'
+          : 'transparent',
+      }}
       onDragOver={(e) => {
         e.preventDefault();
         setActive(true);
@@ -38,8 +41,32 @@ export function FileDropzone({ onFiles, accept = '.txt', className }: Props) {
       onDragLeave={() => setActive(false)}
       onDrop={onDrop}
     >
-      <p className="text-sm text-neutral-600">把 LINE 匯出的 .txt 拖到這裡</p>
-      <p className="mt-1 text-xs text-neutral-400">或點擊選擇檔案（支援多檔）</p>
+      <div
+        className={cn(
+          'pointer-events-none flex h-full w-full flex-col items-center justify-center transition-all duration-300',
+          active ? 'scale-[1.02]' : 'scale-100'
+        )}
+      >
+        <p
+          className={cn(
+            'text-sm tracking-tight transition-colors duration-300',
+            active ? 'text-neutral-900' : 'text-neutral-600 group-hover:text-neutral-800'
+          )}
+          style={{
+            textShadow: '0 1px 2px rgba(255,255,255,0.6)',
+          }}
+        >
+          把 LINE 匯出的 .txt 拖到這裡
+        </p>
+        <p
+          className="mt-1 text-[11px] uppercase tracking-[0.24em] text-neutral-500/80"
+          style={{
+            textShadow: '0 1px 2px rgba(255,255,255,0.5)',
+          }}
+        >
+          specimen intake · drop or click
+        </p>
+      </div>
       <input
         type="file"
         accept={accept}

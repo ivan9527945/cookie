@@ -3,6 +3,11 @@ export default function OnboardingLayout({
 }: {
   children: React.ReactNode;
 }) {
-  // 不約束容器寬度 — upload 頁自己包 max-w-2xl，process 頁要走 full-screen hero。
-  return <main className="min-h-screen w-full">{children}</main>;
+  // upload 頁自帶 3D 病房場景；preview/submitting 階段走樸素白底。
+  // process 頁是 full-screen split + cookie shell。
+  return (
+    <main className="relative min-h-screen w-full overflow-hidden bg-[#f4f5f3] text-neutral-800">
+      {children}
+    </main>
+  );
 }
