@@ -2,6 +2,11 @@ import { NextResponse } from 'next/server';
 import { getActiveUser } from '@/server/user';
 import { runPersonaPipeline } from '@/server/persona/generate';
 import { isRunning, setStatus, getStatus } from '@/server/persona/status';
+import {
+  isMockMode,
+  startMockPipeline,
+  MOCK_USER_ID,
+} from '@/server/persona/mock';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -16,6 +21,21 @@ export const maxDuration = 300;
  * 回應立刻 202；UI 透過 /api/persona/status 輪詢進度。
  */
 export async function POST() {
+  // 模擬模式：不碰 DB / Claude，直接啟動假進度。
+  if (isMockMode()) {
+    if (isRunning(MOCK_USER_ID)) {
+      return NextResponse.json(
+        { error: 'pipeline already running', status: getStatus(MOCK_USER_ID) },
+        { status: 409 }
+      );
+    }
+    startMockPipeline();
+    return NextResponse.json(
+      { status: 'started (mock)', userId: MOCK_USER_ID },
+      { status: 202 }
+    );
+  }
+
   const user = await getActiveUser();
   if (!user) {
     return NextResponse.json({ error: 'no active user' }, { status: 401 });

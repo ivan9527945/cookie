@@ -27,6 +27,29 @@ import type {
 const BILLING_INSUFFICIENT_CODE = 'billing_insufficient';
 const ANTHROPIC_BILLING_URL = 'https://console.anthropic.com/settings/billing';
 
+// 模擬模式（NEXT_PUBLIC_PERSONA_MOCK=1）：沒有真實匯入紀錄時，塞一份假的
+// ingest_result，讓「開始生成」之後的畫面可以在本地完整跑一遍。
+const MOCK_MODE = process.env.NEXT_PUBLIC_PERSONA_MOCK === '1';
+const MOCK_INGEST_RESULT: IngestResponse = {
+  userId: 'mock-user',
+  totalMessages: 18432,
+  totalChunks: 248,
+  chats: [
+    {
+      uploadedChatId: 'mock-1',
+      chatRoom: '與 A 的對話',
+      messageCount: 12044,
+      chunkCount: 160,
+    },
+    {
+      uploadedChatId: 'mock-2',
+      chatRoom: '大學群組',
+      messageCount: 6388,
+      chunkCount: 88,
+    },
+  ],
+};
+
 interface Estimate {
   totalChunks: number;
   pendingAnnotation: number;
@@ -53,6 +76,8 @@ export default function ProcessPage() {
       } catch {
         /* ignore */
       }
+    } else if (MOCK_MODE) {
+      setResult(MOCK_INGEST_RESULT);
     }
     setMode('awakening');
     // 對齊 store 的動畫總時長；加 200ms 緩衝，讓蛋形最後 smoothstep 完整跑完
