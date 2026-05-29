@@ -15,6 +15,8 @@ interface CookieShellProps {
   transparent?: boolean;
   /** 蛋形偏轉（弧度），用來讓它「面向」某個方向，例如朝中央的視訊鏡頭。 */
   lean?: number;
+  /** 讓蛋形以視訊鏡頭作為折射來源（方向 B：你被折射、含進蛋的形體裡）。 */
+  webcamTransmission?: boolean;
 }
 
 export function CookieShell({
@@ -22,6 +24,7 @@ export function CookieShell({
   className,
   transparent = false,
   lean = 0,
+  webcamTransmission = false,
 }: CookieShellProps) {
   const reducedMotion = useReducedMotion();
   const visible = useDocumentVisible();
@@ -60,6 +63,7 @@ export function CookieShell({
             reducedMotion={reducedMotion}
             isMobile={isMobile}
             lean={lean}
+            webcamTransmission={webcamTransmission}
           />
           {/* 透明覆蓋模式不跑 PostFX：Vignette 會在透明邊緣壓出黑角，破壞透出效果 */}
           {reducedMotion || transparent ? null : <PostFX />}

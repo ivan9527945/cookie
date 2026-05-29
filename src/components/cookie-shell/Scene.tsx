@@ -10,6 +10,8 @@ interface SceneProps {
   isMobile?: boolean;
   /** 整顆蛋（含粒子）繞 Y 軸偏轉的弧度，用來讓它「面向」某方向。 */
   lean?: number;
+  /** 讓蛋形以視訊鏡頭作為折射來源。 */
+  webcamTransmission?: boolean;
 }
 
 export function Scene({
@@ -17,6 +19,7 @@ export function Scene({
   reducedMotion = false,
   isMobile = false,
   lean = 0,
+  webcamTransmission = false,
 }: SceneProps) {
   const particleCount = isMobile
     ? variant === 'hero'
@@ -49,7 +52,7 @@ export function Scene({
 
       <group rotation={[0, lean, lean * 0.2]}>
         <Float {...floatProps}>
-          <Egg />
+          <Egg webcamTransmission={webcamTransmission} />
           <ParticleField count={particleCount} />
         </Float>
       </group>

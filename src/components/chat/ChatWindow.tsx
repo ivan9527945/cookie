@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useChat } from '@/hooks/useChat';
 import { MessageBubble } from './MessageBubble';
 import { WebcamLayer } from './WebcamLayer';
+import { DreamBackground } from './DreamBackground';
+import { MemoryWords } from './MemoryWords';
 import { DynamicCookieShellOverlay } from '@/components/cookie-shell/dynamic';
 import { useCookieState } from '@/components/cookie-shell/hooks/useCookieState';
 import { Button } from '@/components/ui/button';
@@ -60,8 +62,12 @@ export function ChatWindow() {
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-[#f4f4f0]">
-      {/* === 背景層：視訊鏡頭裡的我 === */}
-      <WebcamLayer className="absolute inset-0 z-0" />
+      {/* === 背景層：光之虛空 ＋ 你說過的話飄在遠處 === */}
+      <DreamBackground className="absolute inset-0 z-0" />
+      <MemoryWords className="absolute inset-0 z-[1]" />
+
+      {/* === 鏡頭層：取流＋淡殘影（畫布透明，把白底交給 DreamBackground） === */}
+      <WebcamLayer className="absolute inset-0 z-[2]" />
 
       {/* === 中間層：玻璃蛋形 AI（另一個我），落在左下、面向中央 === */}
       <div className="pointer-events-none absolute bottom-[2%] left-[-4%] z-10 h-[82%] w-[58%] md:left-[1%] md:w-[46%]">
@@ -78,6 +84,7 @@ export function ChatWindow() {
           variant="ambient"
           transparent
           lean={0.62}
+          webcamTransmission
           className="absolute inset-0 h-full w-full"
         />
       </div>
