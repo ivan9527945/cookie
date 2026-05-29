@@ -131,12 +131,31 @@ export default function OnboardingPage() {
           </div>
         ) : null}
 
-        {/* Dropzone — 透明點擊區，蓋住整個病床範圍 */}
+        {/* 夢境氛圍：四周柔和壓暗的暗角，把視線聚向病床（超現實聚焦感） */}
         <div
-          className="absolute left-1/2 top-[56%] z-10 -translate-x-1/2 -translate-y-1/2"
+          className="pointer-events-none absolute inset-0 z-5"
           style={{
-            width: 'min(820px, 78vw)',
-            height: 'min(360px, 48vh)',
+            background:
+              'radial-gradient(ellipse 58% 56% at 49% 58%, rgba(70,86,104,0) 52%, rgba(70,86,104,0.16) 100%)',
+            mixBlendMode: 'multiply',
+          }}
+        />
+        {/* 病床上方的冷色靈光暈染 */}
+        <div
+          className="pointer-events-none absolute inset-0 z-5"
+          style={{
+            background:
+              'radial-gradient(ellipse 40% 36% at 49% 60%, rgba(168,220,236,0.4), rgba(255,255,255,0) 62%)',
+            mixBlendMode: 'screen',
+          }}
+        />
+
+        {/* Dropzone — 貼合病床形體的夢境光毯（同時是點擊／拖放區） */}
+        <div
+          className="absolute left-1/2 top-[57%] z-10 -translate-x-1/2 -translate-y-1/2"
+          style={{
+            width: 'min(760px, 86vw)',
+            height: 'min(420px, 52vh)',
           }}
         >
           <FileDropzone onFiles={handleFiles} />
