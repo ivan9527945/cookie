@@ -91,6 +91,48 @@ LLM 三層（`src/lib/anthropic.ts` 的 `MODELS`）：
 
 三條主要資料流：**匯入 → 生成人格 → 對話**。
 
+```mermaid
+flowchart TD
+    subgraph Ingest["① 匯入 · line-parser"]
+        TXT["LINE .txt"] --> PARSE["parse → chunk(間隔30分) → persist"]
+    end
+
+    subgraph Persona["② 生成人格 · persona"]
+        ANN["annotate 標註 · Haiku ×8"] --> EXT["extract · Opus map-reduce · importance≥4"]
+        EXT --> PROF["PersonaProfile · 版本化 + overrides"]
+    end
+
+    subgraph Chat["③ 對話 · chat"]
+        MSG["你的訊息"] --> RET["retrieve · chunks top-5 / episodes top-3"]
+        RET --> SYS["system prompt · mirror / simulation"]
+        SYS --> STREAM["Claude streaming"]
+        STREAM --> SAVE["ChatMessage 寫回"]
+        SAVE --> EPI["episodic 抽取 · Haiku"]
+    end
+
+    PG[("Postgres<br/>真實來源")]
+    QC[("Qdrant: chunks")]
+    QE[("Qdrant: episodes")]
+
+    PARSE --> PG
+    PG --> ANN
+    ANN --> PG
+    ANN -->|"embed 1536d"| QC
+    PROF --> PG
+
+    QC --> RET
+    QE --> RET
+    PROF --> SYS
+    PG -->|"近20筆歷史"| SYS
+    SAVE --> PG
+    EPI -->|"embed"| QE
+
+    classDef store fill:#eef0ff,stroke:#9a8cff,color:#222;
+    class PG,QC,QE store;
+```
+
+帶標註的線性視圖：
+
 ```
 LINE .txt
    │  parse（iOS/Android 格式）→ chunk（間隔 30 分鐘分群）→ persist
