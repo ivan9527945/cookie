@@ -3,6 +3,7 @@ import { Inter, IBM_Plex_Mono, Noto_Sans_TC } from 'next/font/google';
 import './globals.css';
 import '../styles/tokens.css';
 import '../styles/glitch.css';
+import { PageTransition } from '@/components/shared/PageTransition';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -40,7 +41,7 @@ export default function RootLayout({
       className={`${inter.variable} ${plexMono.variable} ${notoTC.variable}`}
     >
       <body className="min-h-screen bg-cookie-bg text-cookie-ink antialiased">
-        {children}
+        <PageTransition>{children}</PageTransition>
       </body>
     </html>
   );
