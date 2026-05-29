@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getActiveUser } from '@/server/user';
 import { getActiveSession } from '@/server/chat/session';
+import { isMockMode } from '@/server/persona/mock';
+import { getMockHistory } from '@/server/chat/mock';
 import type {
   ChatHistoryMessage,
   ChatHistoryResponse,
@@ -18,6 +20,10 @@ const LIMIT = 100;
  */
 export async function GET() {
   const empty: ChatHistoryResponse = { session: null, messages: [] };
+
+  // 模擬模式：回記憶體裡的 mock 對話。
+  if (isMockMode()) return NextResponse.json(getMockHistory());
+
   const user = await getActiveUser();
   if (!user) return NextResponse.json(empty);
 

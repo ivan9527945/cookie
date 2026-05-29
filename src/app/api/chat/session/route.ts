@@ -7,6 +7,8 @@ import {
   getActiveSession,
   getOrCreateActiveSession,
 } from '@/server/chat/session';
+import { isMockMode } from '@/server/persona/mock';
+import { clearMockChat, mockSessionMeta } from '@/server/chat/mock';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -15,6 +17,13 @@ const SESSION_COOKIE = 'cookie_session_id';
 
 /** POST /api/chat/session — 結束目前 session、建立新 session */
 export async function POST() {
+  // 模擬模式：清掉記憶體對話，回一個新的假 session。
+  if (isMockMode()) {
+    clearMockChat();
+    const meta = mockSessionMeta();
+    return NextResponse.json({ id: meta.id, startedAt: meta.startedAt });
+  }
+
   const user = await getActiveUser();
   if (!user) {
     return NextResponse.json({ error: 'no active user' }, { status: 401 });

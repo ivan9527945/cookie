@@ -6,6 +6,8 @@ import { getOrCreateActiveSession } from '@/server/chat/session';
 import { prepareChatTurn } from '@/server/chat/pipeline';
 import { extractEpisodes } from '@/server/memory/episodic';
 import { writeAudit } from '@/server/audit';
+import { isMockMode } from '@/server/persona/mock';
+import { mockChatResponse } from '@/server/chat/mock';
 import type { ChatRequestBody, ChatTurn } from '@/types/chat';
 
 export const runtime = 'nodejs';
@@ -24,6 +26,20 @@ const HISTORY_LIMIT = 20;
  * 5. stream 結束後背景：寫 assistant message + audit + 抽 episodic memory
  */
 export async function POST(req: NextRequest) {
+  // 模擬模式：不需要 user / persona / Claude，直接串流一段 mock 回覆。
+  if (isMockMode()) {
+    let mockBody: ChatRequestBody;
+    try {
+      mockBody = (await req.json()) as ChatRequestBody;
+    } catch {
+      return NextResponse.json({ error: 'invalid body' }, { status: 400 });
+    }
+    if (!mockBody.message?.trim()) {
+      return NextResponse.json({ error: 'empty message' }, { status: 400 });
+    }
+    return mockChatResponse(mockBody.message, mockBody.mode ?? 'mirror');
+  }
+
   const user = await getActiveUser();
   if (!user) {
     return NextResponse.json({ error: 'no active user' }, { status: 401 });
