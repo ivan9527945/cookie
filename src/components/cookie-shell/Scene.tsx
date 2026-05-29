@@ -8,12 +8,15 @@ interface SceneProps {
   variant: 'hero' | 'ambient';
   reducedMotion?: boolean;
   isMobile?: boolean;
+  /** 整顆蛋（含粒子）繞 Y 軸偏轉的弧度，用來讓它「面向」某方向。 */
+  lean?: number;
 }
 
 export function Scene({
   variant,
   reducedMotion = false,
   isMobile = false,
+  lean = 0,
 }: SceneProps) {
   const particleCount = isMobile
     ? variant === 'hero'
@@ -44,10 +47,12 @@ export function Scene({
 
       <Environment preset="studio" environmentIntensity={0.6} />
 
-      <Float {...floatProps}>
-        <Egg />
-        <ParticleField count={particleCount} />
-      </Float>
+      <group rotation={[0, lean, lean * 0.2]}>
+        <Float {...floatProps}>
+          <Egg />
+          <ParticleField count={particleCount} />
+        </Float>
+      </group>
     </>
   );
 }

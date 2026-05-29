@@ -11,11 +11,17 @@ interface CookieShellProps {
   /** 'hero' 用於 onboarding/landing，'ambient' 用於 chat 背景 */
   variant?: 'hero' | 'ambient';
   className?: string;
+  /** 透明畫布：不繪製背景色與霧，讓底下的內容（例如視訊鏡頭）透出。 */
+  transparent?: boolean;
+  /** 蛋形偏轉（弧度），用來讓它「面向」某個方向，例如朝中央的視訊鏡頭。 */
+  lean?: number;
 }
 
 export function CookieShell({
   variant = 'hero',
   className,
+  transparent = false,
+  lean = 0,
 }: CookieShellProps) {
   const reducedMotion = useReducedMotion();
   const visible = useDocumentVisible();
@@ -42,15 +48,21 @@ export function CookieShell({
           powerPreference: 'high-performance',
         }}
       >
-        <color attach="background" args={['#F4F4F0']} />
-        <fog attach="fog" args={['#F4F4F0', 8, 14]} />
+        {transparent ? null : (
+          <>
+            <color attach="background" args={['#F4F4F0']} />
+            <fog attach="fog" args={['#F4F4F0', 8, 14]} />
+          </>
+        )}
         <Suspense fallback={null}>
           <Scene
             variant={variant}
             reducedMotion={reducedMotion}
             isMobile={isMobile}
+            lean={lean}
           />
-          {reducedMotion ? null : <PostFX />}
+          {/* 透明覆蓋模式不跑 PostFX：Vignette 會在透明邊緣壓出黑角，破壞透出效果 */}
+          {reducedMotion || transparent ? null : <PostFX />}
         </Suspense>
       </Canvas>
     </div>
